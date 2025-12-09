@@ -1,0 +1,63 @@
+basePath: /
+definitions:
+  domain.Session:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      end_time:
+        type: string
+      id:
+        type: string
+      start_time:
+        type: string
+      title:
+        type: string
+      track_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: This is the backend API for a conference ticketing system.
+  title: Multi-Track Ticketing API
+  version: "1.0"
+paths:
+  /sessions:
+    post:
+      consumes:
+      - application/json
+      description: Create a new conference session
+      parameters:
+      - description: Session Data
+        in: body
+        name: session
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Session'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Session'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a new session
+      tags:
+      - sessions
+swagger: "2.0"
