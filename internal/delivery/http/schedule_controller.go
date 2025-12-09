@@ -16,30 +16,58 @@ func NewScheduleController(uc domain.ManageScheduleUseCase) *ScheduleController 
 	}
 }
 
-// CreateSession godoc
-// @Summary Create a new session
-// @Description Create a new conference session
-// @Tags sessions
+// CreateEvent godoc
+// @Summary Create a new event
+// @Description Create a new conference event
+// @Tags events
 // @Accept json
 // @Produce json
-// @Param session body domain.Session true "Session Data"
-// @Success 201 {object} domain.Session
+// @Param event body domain.Event true "Event Data"
+// @Success 201 {object} domain.Event
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /sessions [post]
-func (c *ScheduleController) CreateSession(w http.ResponseWriter, r *http.Request) {
-	var session domain.Session
-	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
+// @Router /events [post]
+func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
+	var event domain.Event
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := c.UseCase.CreateSession(r.Context(), &session); err != nil {
+	if err := c.UseCase.CreateEvent(r.Context(), &event); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(session)
+	json.NewEncoder(w).Encode(event)
+}
+
+// ImportSessionize godoc
+// @Summary Import schedule from Sessionize
+// @Description Import rooms and sessions from Sessionize for a specific event
+// @Tags events
+// @Param eventID path string true "Event ID"
+// @Param sessionizeID path string true "Sessionize ID"
+// @Success 200 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /events/{eventID}/import/sessionize/{sessionizeID} [post]
+func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionizeID := r.PathValue("sessionizeID")
+
+	if eventID == "" || sessionizeID == "" {
+		http.Error(w, "missing eventID or sessionizeID", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.UseCase.ImportSessionizeData(r.Context(), eventID, sessionizeID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "imported successfully"})
 }

@@ -15,9 +15,9 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/sessions": {
+        "/events": {
             "post": {
-                "description": "Create a new conference session",
+                "description": "Create a new conference event",
                 "consumes": [
                     "application/json"
                 ],
@@ -25,17 +25,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "sessions"
+                    "events"
                 ],
-                "summary": "Create a new session",
+                "summary": "Create a new event",
                 "parameters": [
                     {
-                        "description": "Session Data",
-                        "name": "session",
+                        "description": "Event Data",
+                        "name": "event",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.Session"
+                            "$ref": "#/definitions/domain.Event"
                         }
                     }
                 ],
@@ -43,7 +43,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/domain.Session"
+                            "$ref": "#/definitions/domain.Event"
                         }
                     },
                     "400": {
@@ -66,31 +66,67 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/events/{eventID}/import/sessionize/{sessionizeID}": {
+            "post": {
+                "description": "Import rooms and sessions from Sessionize for a specific event",
+                "tags": [
+                    "events"
+                ],
+                "summary": "Import schedule from Sessionize",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sessionize ID",
+                        "name": "sessionizeID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "domain.Session": {
+        "domain.Event": {
             "type": "object",
             "properties": {
                 "created_at": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "string"
                 },
-                "start_time": {
+                "name": {
                     "type": "string"
                 },
-                "title": {
-                    "type": "string"
-                },
-                "track_id": {
+                "slug": {
                     "type": "string"
                 },
                 "updated_at": {

@@ -41,15 +41,17 @@ func main() {
 	fmt.Println("Connected to Database")
 
 	// 2. Init Layers
+	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
-	manageUseCase := usecase.NewManageScheduleUseCase(sessionRepo, 2*time.Second)
+	manageUseCase := usecase.NewManageScheduleUseCase(eventRepo, sessionRepo, 10*time.Second)
 	scheduleController := delivery.NewScheduleController(manageUseCase)
 
 	// 3. Router
 	mux := http.NewServeMux()
 
 	// API Routes
-	mux.HandleFunc("POST /sessions", scheduleController.CreateSession)
+	mux.HandleFunc("POST /events", scheduleController.CreateEvent)
+	mux.HandleFunc("POST /events/{eventID}/import/sessionize/{sessionizeID}", scheduleController.ImportSessionize)
 
 	// Swagger
 	mux.Handle("/swagger/", httpSwagger.WrapHandler)

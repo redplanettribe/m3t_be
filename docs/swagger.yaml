@@ -1,20 +1,14 @@
 basePath: /
 definitions:
-  domain.Session:
+  domain.Event:
     properties:
       created_at:
         type: string
-      description:
-        type: string
-      end_time:
-        type: string
       id:
         type: string
-      start_time:
+      name:
         type: string
-      title:
-        type: string
-      track_id:
+      slug:
         type: string
       updated_at:
         type: string
@@ -26,25 +20,25 @@ info:
   title: Multi-Track Ticketing API
   version: "1.0"
 paths:
-  /sessions:
+  /events:
     post:
       consumes:
       - application/json
-      description: Create a new conference session
+      description: Create a new conference event
       parameters:
-      - description: Session Data
+      - description: Event Data
         in: body
-        name: session
+        name: event
         required: true
         schema:
-          $ref: '#/definitions/domain.Session'
+          $ref: '#/definitions/domain.Event'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/domain.Session'
+            $ref: '#/definitions/domain.Event'
         "400":
           description: Bad Request
           schema:
@@ -57,7 +51,37 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Create a new session
+      summary: Create a new event
       tags:
-      - sessions
+      - events
+  /events/{eventID}/import/sessionize/{sessionizeID}:
+    post:
+      description: Import rooms and sessions from Sessionize for a specific event
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Sessionize ID
+        in: path
+        name: sessionizeID
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Import schedule from Sessionize
+      tags:
+      - events
 swagger: "2.0"
