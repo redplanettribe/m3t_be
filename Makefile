@@ -3,6 +3,9 @@ DB_URL=postgres://postgres:postgres@localhost:5432/multitrackticketing?sslmode=d
 run:
 	go run cmd/api/main.go
 
+watch:
+	air
+
 migrate-up:
 	migrate -path migrations -database "$(DB_URL)" up
 

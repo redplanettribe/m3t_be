@@ -32,3 +32,5 @@ go.work
 Thumbs.db
 
 api
+# Air temp
+tmp/
