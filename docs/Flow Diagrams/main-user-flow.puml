@@ -1,0 +1,72 @@
+@startuml Detailed Booking User Flow
+title Detailed User Flow for Booking a Session - User vs System Actions
+
+|User|
+start
+:Completes physical\nevent check-in;
+:Scans QR code with\nmobile device;
+
+|System|
+:Validates QR code;
+:Authenticates user\nvia check-in database;
+:Gives user an identifier;
+:Returns event data;
+
+|User|
+repeat
+  :Views agenda interface;
+  :Browses sessions\nby room/time;
+  :Examines session details\n(capacity, description, etc.);
+  
+|System|
+  :Fetches real-time\nsession data;
+  :Calculates available spots\nper session;
+  :Updates occupancy\ncounters in real-time;
+  :Displays agenda with\ncurrent availability;
+
+|User|
+  :Selects desired session;
+  :Clicks "Book" button;
+
+|System|
+  :Validates session\navailability;
+  :Checks user's existing\nbookings for conflicts;
+  
+  if (Session overlaps with\nexisting booking?) then (Yes)
+    :Identifies conflicting\nsession(s);
+    :Displays overlap warning\nwith conflict details;
+    
+    |User|
+    if (User chooses to\nreplace existing booking?) then (Yes)
+      :Confirms replacement;
+      
+      |System|
+      :Cancels previous booking;
+      :Updates session capacity\nfor cancelled session;
+      :Creates new booking;
+      :Updates session capacity\nfor new session;
+      
+    else (No)
+      |User|
+      :Returns to agenda view;
+      detach
+    endif
+    
+  else (No)
+    |System|
+    :Proceeds with booking;
+    :Creates booking record;
+    :Updates session capacity;
+    :Generates booking confirmation;
+  endif
+  :Updates availability\nand notifies other clients;
+  :Confirms successful booking to user;
+
+|User|
+:Sees session as booked;
+:Sees updated personal schedule;
+
+backward :Browse more sessions;
+
+
+@enduml
