@@ -13,6 +13,26 @@ migrate-up:
 migrate-down:
 	migrate -path migrations -database "$(DATABASE_URL)" down
 
+# Production migrations: use .env.prod (DATABASE_URL only, never commit secrets).
+# Default sslmode=disable when not set (many hosted DBs e.g. Sevalla don't enable SSL).
+migrate-up-prod:
+	@test -f .env.prod || (echo "Error: .env.prod not found. Create it with DATABASE_URL for production." && exit 1)
+	set -a && . ./.env.prod && set +a && \
+	DB_URL="$$DATABASE_URL"; \
+	echo "$$DB_URL" | grep -q 'sslmode=' || { \
+	  echo "$$DB_URL" | grep -q '?' && DB_URL="$$DB_URL&sslmode=disable" || DB_URL="$$DB_URL?sslmode=disable"; \
+	} && \
+	migrate -path migrations -database "$$DB_URL" up
+
+migrate-down-prod:
+	@test -f .env.prod || (echo "Error: .env.prod not found. Create it with DATABASE_URL for production." && exit 1)
+	set -a && . ./.env.prod && set +a && \
+	DB_URL="$$DATABASE_URL"; \
+	echo "$$DB_URL" | grep -q 'sslmode=' || { \
+	  echo "$$DB_URL" | grep -q '?' && DB_URL="$$DB_URL&sslmode=disable" || DB_URL="$$DB_URL?sslmode=disable"; \
+	} && \
+ 	migrate -path migrations -database "$$DB_URL" down
+
 test:
 	go test ./...
 
