@@ -13,6 +13,13 @@ migrate-up:
 migrate-down:
 	migrate -path migrations -database "$(DATABASE_URL)" down
 
+test:
+	go test ./...
+
+test-cover:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+
 swag:
 	swag init -g cmd/api/main.go -o docs
 

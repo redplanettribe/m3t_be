@@ -1,0 +1,26 @@
+---
+description: Go naming, error handling, and Swagger conventions
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Go Conventions
+
+## Naming
+
+- Constructors: `NewXxx` (e.g. `NewEventRepository`, `NewScheduleController`).
+- Repo/use case structs: unexported; constructor returns domain interface.
+- Controllers: exported struct (e.g. `ScheduleController`).
+- Repo files: `*_repo.go` in `internal/repository/postgres/`. HTTP: `*_controller.go`, `router.go` in `internal/delivery/http/`.
+
+## Errors
+
+- **Usecase**: Wrap with `fmt.Errorf("context: %w", err)` so callers can use `errors.Is`/`errors.As`.
+- **Delivery**: Use `http.Error(w, err.Error(), status)`; no custom JSON error envelope. 400 for bad input (e.g. invalid body, missing path param), 500 for use case/repo failures.
+
+## Swagger (swaggo)
+
+- Above each handler: `// HandlerName godoc` then `@Summary`, `@Description`, `@Tags`, `@Accept`/`@Produce`, `@Param`, `@Success`, `@Failure`, `@Router`.
+- After changing API routes or handler docs, run `make swag` to regenerate `docs/`.
+
+Reference: @internal/delivery/http/schedule_controller.go

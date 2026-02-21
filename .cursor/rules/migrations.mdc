@@ -1,0 +1,14 @@
+---
+description: Database migration format and workflow
+globs: migrations/*.sql
+alwaysApply: false
+---
+
+# Migrations
+
+- Use **golang-migrate**. All schema changes go in migrations only; no ORM.
+- Create **paired files**: `NNNNNN_short_description.up.sql` and `NNNNNN_short_description.down.sql` (e.g. `000002_add_rooms_table.up.sql`).
+- Use **raw SQL** only. Sequence number must be next available in `migrations/`.
+- After adding migrations, run `make migrate-up` to apply.
+
+Reference: @migrations/000001_create_sessions_table.up.sql @migrations/000001_create_sessions_table.down.sql

@@ -24,11 +24,18 @@ We adhere to a strict **Clean Architecture** separation of concerns.
 - **Migrations**: Always create up/down migration files in `migrations/` for DB schema changes.
 - **Tests**: (Future) Table-driven tests preferred.
 
+### 4. Cursor rules and skills
+- **`.cursor/rules/`**: Project rules (Clean Architecture, Go conventions, migrations) applied by file scope in Cursor.
+- **`.cursor/skills/`**: Workflow skills for adding HTTP handlers, repositories, migrations, and regenerating Swagger.
+
 ---
 
 ## 📂 Project Structure
 
 ```text
+├── .cursor
+│   ├── rules            # Cursor rules (Clean Architecture, Go, migrations)
+│   └── skills           # Cursor skills (add handler, repo, migration, swag)
 ├── cmd
 │   └── api              # Application entry point (main.go)
 ├── config               # Configuration setup
@@ -47,7 +54,7 @@ We adhere to a strict **Clean Architecture** separation of concerns.
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Go 1.22+
+- Go 1.26+
 - Docker & Docker Compose
 - Make
 

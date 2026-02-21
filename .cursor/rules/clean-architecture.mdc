@@ -1,0 +1,21 @@
+---
+description: Clean Architecture layer boundaries and dependencies for internal packages
+globs: internal/**/*.go
+alwaysApply: false
+---
+
+# Clean Architecture
+
+Dependency flow: `cmd` → `delivery` → `usecase` → `domain`; `repository` → `domain`.
+
+- **domain** (`internal/domain`): Entities (e.g. `Event`, `Session`) and interfaces (`EventRepository`, `ManageScheduleUseCase`). No imports from `internal/usecase`, `internal/repository`, or `internal/delivery`. Only stdlib (e.g. `context`, `time`) allowed.
+
+- **usecase** (`internal/usecase`): Business logic. Depends only on `domain`. Receives repository interfaces and optional timeout via constructor. Wrap errors with `fmt.Errorf(..., %w, err)`.
+
+- **repository/postgres** (`internal/repository/postgres`): Implements domain repository interfaces. Uses `database/sql` and **raw SQL only** — no ORM. Unexported struct (e.g. `eventRepository`), constructor returns `domain.XxxRepository`.
+
+- **delivery/http** (`internal/delivery/http`): HTTP handlers and router. Depends on use case via domain interfaces (e.g. `domain.ManageScheduleUseCase`). Uses `http.ServeMux`, `r.PathValue("param")` for path params. Document handlers with swaggo comments.
+
+Wire dependencies in `cmd/api/main.go`: DB → repos → use case (repos + timeout) → controller → `NewRouter(controller)`.
+
+Reference: @internal/repository/postgres/event_repo.go @internal/usecase/manage_schedule.go @internal/delivery/http/schedule_controller.go
