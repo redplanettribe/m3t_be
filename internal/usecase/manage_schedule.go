@@ -2,9 +2,7 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"multitrackticketing/internal/domain"
@@ -13,13 +11,15 @@ import (
 type manageScheduleUseCase struct {
 	eventRepo      domain.EventRepository
 	sessionRepo    domain.SessionRepository
+	sessionize     SessionizeFetcher
 	contextTimeout time.Duration
 }
 
-func NewManageScheduleUseCase(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, timeout time.Duration) domain.ManageScheduleUseCase {
+func NewManageScheduleUseCase(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, sessionize SessionizeFetcher, timeout time.Duration) domain.ManageScheduleUseCase {
 	return &manageScheduleUseCase{
 		eventRepo:      eventRepo,
 		sessionRepo:    sessionRepo,
+		sessionize:     sessionize,
 		contextTimeout: timeout,
 	}
 }
@@ -39,20 +39,9 @@ func (uc *manageScheduleUseCase) ImportSessionizeData(ctx context.Context, event
 	defer cancel()
 
 	// 1. Fetch data from Sessionize
-	url := fmt.Sprintf("https://sessionize.com/api/v2/%s/view/GridSmart", sessionizeID)
-	resp, err := http.Get(url)
+	sessionizeData, err := uc.sessionize.Fetch(ctx, sessionizeID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch from sessionize: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("sessionize api returned status: %d", resp.StatusCode)
-	}
-
-	var sessionizeData SessionizeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&sessionizeData); err != nil {
-		return fmt.Errorf("failed to decode sessionize response: %w", err)
+		return err
 	}
 
 	// 2. Clear existing schedule

@@ -43,7 +43,8 @@ func main() {
 	// 3. Init Layers
 	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
-	manageUseCase := usecase.NewManageScheduleUseCase(eventRepo, sessionRepo, 10*time.Second)
+	sessionizeFetcher := usecase.NewSessionizeHTTPFetcher(nil)
+	manageUseCase := usecase.NewManageScheduleUseCase(eventRepo, sessionRepo, sessionizeFetcher, 10*time.Second)
 	scheduleController := delivery.NewScheduleController(manageUseCase)
 
 	// 4. Router
