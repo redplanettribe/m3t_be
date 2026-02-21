@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +14,8 @@ type Config struct {
 	DBUrl       string
 	Environment string
 	Port        string
+	JWTSecret   string
+	JWTExpiry   time.Duration
 }
 
 // Load loads configuration from environment variables
@@ -32,10 +35,19 @@ func Load() (*Config, error) {
 		}
 	}
 
+	jwtExpiry := 24 * time.Hour
+	if s := os.Getenv("JWT_EXPIRY"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil {
+			jwtExpiry = d
+		}
+	}
+
 	cfg := &Config{
 		Environment: env,
 		DBUrl:       os.Getenv("DATABASE_URL"),
 		Port:        os.Getenv("PORT"),
+		JWTSecret:   os.Getenv("JWT_SECRET"),
+		JWTExpiry:   jwtExpiry,
 	}
 
 	// Set defaults

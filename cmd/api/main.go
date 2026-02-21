@@ -44,12 +44,24 @@ func main() {
 	// 3. Init Layers
 	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
+	userRepo := postgres.NewUserRepository(db)
+	roleRepo := postgres.NewRoleRepository(db)
 	sessionizeFetcher := sessionize.NewHTTPFetcher(nil)
 	manageScheduleService := services.NewManageScheduleService(eventRepo, sessionRepo, sessionizeFetcher, 10*time.Second)
 	scheduleController := delivery.NewScheduleController(manageScheduleService)
 
+	jwtSecret := cfg.JWTSecret
+	if jwtSecret == "" {
+		if cfg.Environment == "production" {
+			log.Fatal("JWT_SECRET is required in production")
+		}
+		jwtSecret = "dev-secret-change-in-production"
+	}
+	authService := services.NewAuthService(userRepo, roleRepo, jwtSecret, cfg.JWTExpiry)
+	authController := delivery.NewAuthController(authService)
+
 	// 4. Router
-	mux := delivery.NewRouter(scheduleController)
+	mux := delivery.NewRouter(scheduleController, authController)
 
 	// 5. Server
 	port := ":" + cfg.Port
