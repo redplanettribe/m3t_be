@@ -1,17 +1,12 @@
-@startuml Context
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.5.0/C4_Context.puml
+# System Context Diagram for Event Booking System
 
+```mermaid
+
+C4Context
 title System Context Diagram for Event Booking System
-
-' ACTORS
 Person(attendee, "Event Attendee", "A person attending the multitrack event.")
 Person(organizer, "Event Organizer", "Staff member managing the event logistics.")
-
-' SYSTEM
 System(event_system, "Event Booking System", "Allows booking, scheduling, and check-in management to prevent overcrowding.")
-
-' RELATIONSHIPS
 Rel(attendee, event_system, "Views availability and books sessions")
 Rel(organizer, event_system, "Uploads schedule and checks in attendees")
-
-@enduml 
+```
