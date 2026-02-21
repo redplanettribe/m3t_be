@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"net/url"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -42,15 +43,28 @@ func Load() (*Config, error) {
 		cfg.Port = "8080"
 	}
 
-	// For DBUrl, we let the caller handle empty value or set a default if needed,
-	// but based on existing main.go, it might have a default local one.
-	// Looking at main.go, it had a hardcoded default. Let's replicate that logic here or let main.go handle it?
-	// The request said "Load those environment vars on a config package".
-	// So let's put the default here if not found.
 	if cfg.DBUrl == "" {
-		// Default from previous main.go
 		cfg.DBUrl = "postgres://postgres:postgres@localhost:5432/multitrackticketing?sslmode=disable"
+	} else {
+		// Ensure sslmode is set. Many hosted DBs (e.g. Sevalla) don't enable SSL;
+		// lib/pq defaults to sslmode=prefer which fails with "SSL is not enabled on the server".
+		cfg.DBUrl = setDefaultSSLMode(cfg.DBUrl, "disable")
 	}
 
 	return cfg, nil
+}
+
+// setDefaultSSLMode adds sslmode=defaultMode to the Postgres URL if no sslmode is set.
+func setDefaultSSLMode(dbURL, defaultMode string) string {
+	u, err := url.Parse(dbURL)
+	if err != nil {
+		return dbURL
+	}
+	q := u.Query()
+	if q.Get("sslmode") != "" {
+		return dbURL
+	}
+	q.Set("sslmode", defaultMode)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
