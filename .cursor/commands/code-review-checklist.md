@@ -32,10 +32,10 @@ Comprehensive checklist for conducting thorough code reviews to ensure quality, 
 
 Verify against this codebase:
 
-- [ ] Clean Architecture layers respected (domain → usecase → repo/delivery)
+- [ ] Clean Architecture layers respected (domain → services → repo/delivery)
 - [ ] No ORM (raw SQL in `internal/repository/postgres`)
-- [ ] Errors wrapped with `fmt.Errorf(..., %w, err)` in usecases
-- [ ] HTTP errors via `http.Error`, 400 for bad input and 500 for use case/repo failures
+- [ ] Errors wrapped with `fmt.Errorf(..., %w, err)` in services
+- [ ] HTTP errors via `http.Error`, 400 for bad input and 500 for service/repo failures
 - [ ] New/changed handlers have swaggo comments and `make swag` was run
 - [ ] Migrations are paired up/down in `migrations/`
 

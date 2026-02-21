@@ -37,8 +37,8 @@ type SessionRepository interface {
 	// ListSessions(ctx context.Context) ([]*Session, error) // Future use
 }
 
-// ManageScheduleUseCase defines the business logic for managing schedule
-type ManageScheduleUseCase interface {
+// ManageScheduleService defines the business logic for managing schedule
+type ManageScheduleService interface {
 	CreateEvent(ctx context.Context, event *Event) error
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
 }

@@ -19,10 +19,10 @@ This repository contains the backend API for the Multi-Track Ticketing system.
 
 We adhere to a strict **Clean Architecture** separation of concerns.
 
-- **`internal/domain`**: Entities and Interface Definitions (Repository, UseCase). **No external dependencies** (except time/context).
-- **`internal/usecase`**: Business logic. Depends only on `domain`.
+- **`internal/domain`**: Entities and Interface Definitions (Repository, Service). **No external dependencies** (except time/context).
+- **`internal/services`**: Business logic. Depends only on `domain`.
 - **`internal/repository`**: Data access implementation (e.g., `postgres`). Depends on `domain`.
-- **`internal/delivery`**: Transport layer (e.g., `http`). Depends on `usecase`.
+- **`internal/delivery`**: Transport layer (e.g., `http`). Depends on `services`.
 
 ### 3. Workflow
 
@@ -48,7 +48,7 @@ We adhere to a strict **Clean Architecture** separation of concerns.
 ├── docs                 # Generated Swagger docs
 ├── internal
 │   ├── domain           # Core business entities & interface definitions
-│   ├── usecase          # Application business logic
+│   ├── services        # Application business logic
 │   ├── repository       # Database implementations (Raw SQL)
 │   └── delivery
 │       └── http         # HTTP Handlers

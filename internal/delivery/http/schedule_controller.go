@@ -7,12 +7,12 @@ import (
 )
 
 type ScheduleController struct {
-	UseCase domain.ManageScheduleUseCase
+	Service domain.ManageScheduleService
 }
 
-func NewScheduleController(uc domain.ManageScheduleUseCase) *ScheduleController {
+func NewScheduleController(svc domain.ManageScheduleService) *ScheduleController {
 	return &ScheduleController{
-		UseCase: uc,
+		Service: svc,
 	}
 }
 
@@ -34,7 +34,7 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := c.UseCase.CreateEvent(r.Context(), &event); err != nil {
+	if err := c.Service.CreateEvent(r.Context(), &event); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -62,7 +62,7 @@ func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := c.UseCase.ImportSessionizeData(r.Context(), eventID, sessionizeID); err != nil {
+	if err := c.Service.ImportSessionizeData(r.Context(), eventID, sessionizeID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

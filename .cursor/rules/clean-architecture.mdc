@@ -6,16 +6,18 @@ alwaysApply: false
 
 # Clean Architecture
 
-Dependency flow: `cmd` → `delivery` → `usecase` → `domain`; `repository` → `domain`.
+Dependency flow: `cmd` → `delivery` → `services` → `domain`; `repository` → `domain`; `client` → `domain`. Only `cmd` instantiates repos and clients.
 
-- **domain** (`internal/domain`): Entities (e.g. `Event`, `Session`) and interfaces (`EventRepository`, `ManageScheduleUseCase`). No imports from `internal/usecase`, `internal/repository`, or `internal/delivery`. Only stdlib (e.g. `context`, `time`) allowed.
+- **domain** (`internal/domain`): Entities (e.g. `Event`, `Session`) and interfaces (`EventRepository`, `ManageScheduleService`, `SessionizeFetcher`). No imports from `internal/services`, `internal/repository`, `internal/delivery`, or `internal/client`. Only stdlib (e.g. `context`, `time`) allowed.
 
-- **usecase** (`internal/usecase`): Business logic. Depends only on `domain`. Receives repository interfaces and optional timeout via constructor. Wrap errors with `fmt.Errorf(..., %w, err)`.
+- **services** (`internal/services`): Business logic. Depends only on `domain`. Receives repository interfaces, optional external-service ports (e.g. `SessionizeFetcher`), and optional timeout via constructor. Wrap errors with `fmt.Errorf(..., %w, err)`.
 
 - **repository/postgres** (`internal/repository/postgres`): Implements domain repository interfaces. Uses `database/sql` and **raw SQL only** — no ORM. Unexported struct (e.g. `eventRepository`), constructor returns `domain.XxxRepository`.
 
-- **delivery/http** (`internal/delivery/http`): HTTP handlers and router. Depends on use case via domain interfaces (e.g. `domain.ManageScheduleUseCase`). Uses `http.ServeMux`, `r.PathValue("param")` for path params. Document handlers with swaggo comments.
+- **client** (`internal/client/<name>`, e.g. `internal/client/sessionize`): Implements domain ports for **external services** (APIs, etc.). Unexported struct, constructor returns `domain.XxxFetcher` (or similar). Service receives the interface from domain; only `cmd` instantiates the concrete client.
 
-Wire dependencies in `cmd/api/main.go`: DB → repos → use case (repos + timeout) → controller → `NewRouter(controller)`.
+- **delivery/http** (`internal/delivery/http`): HTTP handlers and router. Depends on service via domain interfaces (e.g. `domain.ManageScheduleService`). Uses `http.ServeMux`, `r.PathValue("param")` for path params. Document handlers with swaggo comments.
 
-Reference: @internal/repository/postgres/event_repo.go @internal/usecase/manage_schedule.go @internal/delivery/http/schedule_controller.go
+Wire dependencies in `cmd/api/main.go`: DB → repos; instantiate clients (e.g. Sessionize); service (repos + client + timeout) → controller → `NewRouter(controller)`.
+
+Reference: @internal/repository/postgres/event_repo.go @internal/services/manage_schedule.go @internal/delivery/http/schedule_controller.go @internal/client/sessionize/client.go

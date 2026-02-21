@@ -22,6 +22,10 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, Go conventions).
    - Constructor `NewXxxRepository(db *sql.DB) domain.XxxRepository` returning the interface.
    - Implement all interface methods using **raw SQL** only (`database/sql`; no ORM). Use `QueryRowContext`/`ExecContext`/`QueryContext` as appropriate.
 
-3. **Wire in main**: In `cmd/api/main.go`, instantiate the new repo (e.g. `xxxRepo := postgres.NewXxxRepository(db)`) and pass it into the use case constructor. If the use case interface does not yet accept this repo, extend the domain use case interface and the usecase implementation to accept and use it.
+3. **Wire in main**: In `cmd/api/main.go`, instantiate the new repo (e.g. `xxxRepo := postgres.NewXxxRepository(db)`) and pass it into the service constructor. If the service interface does not yet accept this repo, extend the domain service interface and the services implementation to accept and use it.
 
-4. **Use case (if needed)**: If the new repo is used by an existing use case, add it to the use case constructor and struct in `internal/usecase`, and call the repo from the use case methods as needed.
+4. **Service (if needed)**: If the new repo is used by an existing service, add it to the service constructor and struct in `internal/services`, and call the repo from the service methods as needed.
+
+## External services
+
+For dependencies on **external APIs** (e.g. Sessionize, payment providers): define the port interface and response DTO in `internal/domain`, implement the adapter in `internal/client/<name>` (e.g. `internal/client/sessionize`), and wire the implementation in `cmd/api/main.go` like repositories. The service receives the domain interface only. See `.cursor/rules/clean-architecture.mdc` for the client layer.

@@ -1,4 +1,4 @@
-package usecase
+package services
 
 import (
 	"context"
@@ -120,11 +120,11 @@ func (f *fakeSessionRepo) DeleteScheduleByEventID(ctx context.Context, eventID s
 
 // fakeSessionizeFetcher returns fixed data or a configurable error.
 type fakeSessionizeFetcher struct {
-	data SessionizeResponse
+	data domain.SessionizeResponse
 	err  error
 }
 
-func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) (SessionizeResponse, error) {
+func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) (domain.SessionizeResponse, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -132,16 +132,16 @@ func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) 
 }
 
 // defaultSessionizeData returns a minimal valid SessionizeResponse for tests.
-func defaultSessionizeData() SessionizeResponse {
+func defaultSessionizeData() domain.SessionizeResponse {
 	desc := "A talk"
-	return SessionizeResponse{
+	return domain.SessionizeResponse{
 		{
 			Date: "2025-03-01",
-			Rooms: []SessionizeRoom{
+			Rooms: []domain.SessionizeRoom{
 				{
 					ID:   1,
 					Name: "Room A",
-					Sessions: []SessionizeSession{
+					Sessions: []domain.SessionizeSession{
 						{
 							ID:          "s1",
 							Title:       "Talk 1",
@@ -157,20 +157,20 @@ func defaultSessionizeData() SessionizeResponse {
 	}
 }
 
-func TestManageScheduleUseCase_CreateEvent(t *testing.T) {
+func TestManageScheduleService_CreateEvent(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
 	tests := []struct {
 		name    string
-		setup   func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher)
+		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
 		event   *domain.Event
 		wantErr bool
 		assert  func(t *testing.T, eventRepo *fakeEventRepo, event *domain.Event)
 	}{
 		{
 			name: "success",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
@@ -189,7 +189,7 @@ func TestManageScheduleUseCase_CreateEvent(t *testing.T) {
 		},
 		{
 			name: "repo error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
 				er.err = errors.New("db error")
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -203,9 +203,9 @@ func TestManageScheduleUseCase_CreateEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			uc := NewManageScheduleUseCase(eventRepo, sessionRepo, fetcher, timeout)
+			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
 			ev := &domain.Event{Name: tt.event.Name, Slug: tt.event.Slug}
-			err := uc.CreateEvent(ctx, ev)
+			err := svc.CreateEvent(ctx, ev)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -218,13 +218,13 @@ func TestManageScheduleUseCase_CreateEvent(t *testing.T) {
 	}
 }
 
-func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
+func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
 	tests := []struct {
 		name    string
-		setup   func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher)
+		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
 		eventID string
 		sessID  string
 		wantErr bool
@@ -232,7 +232,7 @@ func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
 	}{
 		{
 			name: "success",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{data: defaultSessionizeData()}
 			},
 			eventID: "ev-1",
@@ -247,7 +247,7 @@ func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "fetcher error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{err: errors.New("fetch failed")}
 			},
 			eventID: "ev-1",
@@ -257,7 +257,7 @@ func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "DeleteScheduleByEventID error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				sr := newFakeSessionRepo()
 				sr.deleteErr = errors.New("delete failed")
 				return newFakeEventRepo(), sr, &fakeSessionizeFetcher{data: defaultSessionizeData()}
@@ -269,7 +269,7 @@ func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "CreateRoom error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				sr := newFakeSessionRepo()
 				sr.createRoomErr = errors.New("create room failed")
 				return newFakeEventRepo(), sr, &fakeSessionizeFetcher{data: defaultSessionizeData()}
@@ -281,7 +281,7 @@ func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "CreateSession error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				sr := newFakeSessionRepo()
 				sr.createSessionErr = errors.New("create session failed")
 				return newFakeEventRepo(), sr, &fakeSessionizeFetcher{data: defaultSessionizeData()}
@@ -296,8 +296,8 @@ func TestManageScheduleUseCase_ImportSessionizeData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			uc := NewManageScheduleUseCase(eventRepo, sessionRepo, fetcher, timeout)
-			err := uc.ImportSessionizeData(ctx, tt.eventID, tt.sessID)
+			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
+			err := svc.ImportSessionizeData(ctx, tt.eventID, tt.sessID)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

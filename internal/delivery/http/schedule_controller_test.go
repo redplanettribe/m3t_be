@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeManageScheduleUseCase implements domain.ManageScheduleUseCase for handler tests.
-type fakeManageScheduleUseCase struct {
+// fakeManageScheduleService implements domain.ManageScheduleService for handler tests.
+type fakeManageScheduleService struct {
 	createEventErr         error
 	importSessionizeErr    error
 	lastCreateEvent        *domain.Event
@@ -24,7 +24,7 @@ type fakeManageScheduleUseCase struct {
 	lastImportSessionizeID string
 }
 
-func (f *fakeManageScheduleUseCase) CreateEvent(ctx context.Context, event *domain.Event) error {
+func (f *fakeManageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
 	f.lastCreateEvent = event
 	if f.createEventErr != nil {
 		return f.createEventErr
@@ -33,7 +33,7 @@ func (f *fakeManageScheduleUseCase) CreateEvent(ctx context.Context, event *doma
 	return nil
 }
 
-func (f *fakeManageScheduleUseCase) ImportSessionizeData(ctx context.Context, eventID, sessionizeID string) error {
+func (f *fakeManageScheduleService) ImportSessionizeData(ctx context.Context, eventID, sessionizeID string) error {
 	f.lastImportEventID = eventID
 	f.lastImportSessionizeID = sessionizeID
 	return f.importSessionizeErr
@@ -70,7 +70,7 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 			checkEvent:     nil,
 		},
 		{
-			name:           "use case error",
+			name:           "service error",
 			body:           `{"name":"Conf","slug":"conf"}`,
 			fakeErr:        errors.New("db error"),
 			wantStatus:     http.StatusInternalServerError,
@@ -82,7 +82,7 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleUseCase{createEventErr: tt.fakeErr}
+			fake := &fakeManageScheduleService{createEventErr: tt.fakeErr}
 			ctrl := NewScheduleController(fake)
 			req := httptest.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -135,7 +135,7 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 			wantStatusJSON: "",
 		},
 		{
-			name:           "use case error",
+			name:           "service error",
 			path:           "/events/ev-1/import/sessionize/xyz",
 			fakeErr:        errors.New("import failed"),
 			wantStatus:     http.StatusInternalServerError,
@@ -146,7 +146,7 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleUseCase{importSessionizeErr: tt.fakeErr}
+			fake := &fakeManageScheduleService{importSessionizeErr: tt.fakeErr}
 			ctrl := NewScheduleController(fake)
 			req := httptest.NewRequest(http.MethodPost, "http://test"+tt.path, nil)
 			// Set path params for direct handler call (router would set these in production).
@@ -160,7 +160,7 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 			case "missing sessionizeID":
 				req.SetPathValue("eventID", "ev-1")
 				req.SetPathValue("sessionizeID", "")
-			case "use case error":
+			case "service error":
 				req.SetPathValue("eventID", "ev-1")
 				req.SetPathValue("sessionizeID", "xyz")
 			}

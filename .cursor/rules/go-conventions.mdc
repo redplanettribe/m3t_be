@@ -9,14 +9,14 @@ alwaysApply: false
 ## Naming
 
 - Constructors: `NewXxx` (e.g. `NewEventRepository`, `NewScheduleController`).
-- Repo/use case structs: unexported; constructor returns domain interface.
+- Repo/service structs: unexported; constructor returns domain interface.
 - Controllers: exported struct (e.g. `ScheduleController`).
 - Repo files: `*_repo.go` in `internal/repository/postgres/`. HTTP: `*_controller.go`, `router.go` in `internal/delivery/http/`.
 
 ## Errors
 
-- **Usecase**: Wrap with `fmt.Errorf("context: %w", err)` so callers can use `errors.Is`/`errors.As`.
-- **Delivery**: Use `http.Error(w, err.Error(), status)`; no custom JSON error envelope. 400 for bad input (e.g. invalid body, missing path param), 500 for use case/repo failures.
+- **Service**: Wrap with `fmt.Errorf("context: %w", err)` so callers can use `errors.Is`/`errors.As`.
+- **Delivery**: Use `http.Error(w, err.Error(), status)`; no custom JSON error envelope. 400 for bad input (e.g. invalid body, missing path param), 500 for service/repo failures.
 
 ## Swagger (swaggo)
 

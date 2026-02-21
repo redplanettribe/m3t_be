@@ -9,13 +9,13 @@ Follow [.cursor/rules/testing.mdc](.cursor/rules/testing.mdc) and [.cursor/rules
 
 ## 1. Handlers
 
-- Build the controller with a fake or mock implementing the use case interface (e.g. `domain.ManageScheduleUseCase`).
+- Build the controller with a fake or mock implementing the service interface (e.g. `domain.ManageScheduleService`).
 - For each case: create request with `httptest.NewRequest`, create `httptest.ResponseRecorder`, call the handler, then use `assert`/`require` on status code and response body (e.g. decode JSON and compare, or check substring).
 - Use table-driven tests with `t.Run(tt.name, ...)`.
 
-## 2. Use case
+## 2. Service
 
-- Build the use case with fake repositories (e.g. in-memory maps/slices that implement `domain.EventRepository` and `domain.SessionRepository`).
+- Build the service with fake repositories (e.g. in-memory maps/slices that implement `domain.EventRepository` and `domain.SessionRepository`).
 - For methods that call external HTTP (e.g. `ImportSessionizeData`): either inject an HTTP client that hits a test server returning fixed JSON, or introduce a small “Sessionize fetcher” (or similar) interface and inject a fake so unit tests do not call the real API.
 - Use table-driven tests where multiple cases are needed.
 

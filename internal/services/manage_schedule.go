@@ -1,4 +1,4 @@
-package usecase
+package services
 
 import (
 	"context"
@@ -8,15 +8,15 @@ import (
 	"multitrackticketing/internal/domain"
 )
 
-type manageScheduleUseCase struct {
+type manageScheduleService struct {
 	eventRepo      domain.EventRepository
 	sessionRepo    domain.SessionRepository
-	sessionize     SessionizeFetcher
+	sessionize     domain.SessionizeFetcher
 	contextTimeout time.Duration
 }
 
-func NewManageScheduleUseCase(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, sessionize SessionizeFetcher, timeout time.Duration) domain.ManageScheduleUseCase {
-	return &manageScheduleUseCase{
+func NewManageScheduleService(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, sessionize domain.SessionizeFetcher, timeout time.Duration) domain.ManageScheduleService {
+	return &manageScheduleService{
 		eventRepo:      eventRepo,
 		sessionRepo:    sessionRepo,
 		sessionize:     sessionize,
@@ -24,28 +24,28 @@ func NewManageScheduleUseCase(eventRepo domain.EventRepository, sessionRepo doma
 	}
 }
 
-func (uc *manageScheduleUseCase) CreateEvent(ctx context.Context, event *domain.Event) error {
-	ctx, cancel := context.WithTimeout(ctx, uc.contextTimeout)
+func (s *manageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
 	event.CreatedAt = time.Now()
 	event.UpdatedAt = time.Now()
 
-	return uc.eventRepo.Create(ctx, event)
+	return s.eventRepo.Create(ctx, event)
 }
 
-func (uc *manageScheduleUseCase) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
-	ctx, cancel := context.WithTimeout(ctx, uc.contextTimeout)
+func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
 	// 1. Fetch data from Sessionize
-	sessionizeData, err := uc.sessionize.Fetch(ctx, sessionizeID)
+	sessionizeData, err := s.sessionize.Fetch(ctx, sessionizeID)
 	if err != nil {
 		return err
 	}
 
 	// 2. Clear existing schedule
-	if err := uc.sessionRepo.DeleteScheduleByEventID(ctx, eventID); err != nil {
+	if err := s.sessionRepo.DeleteScheduleByEventID(ctx, eventID); err != nil {
 		return fmt.Errorf("failed to delete existing schedule: %w", err)
 	}
 
@@ -69,7 +69,7 @@ func (uc *manageScheduleUseCase) ImportSessionizeData(ctx context.Context, event
 			CreatedAt:        time.Now(),
 			UpdatedAt:        time.Now(),
 		}
-		if err := uc.sessionRepo.CreateRoom(ctx, r); err != nil {
+		if err := s.sessionRepo.CreateRoom(ctx, r); err != nil {
 			return fmt.Errorf("failed to create room %s: %w", name, err)
 		}
 		roomMap[sID] = r.ID
@@ -88,7 +88,7 @@ func (uc *manageScheduleUseCase) ImportSessionizeData(ctx context.Context, event
 				if session.Description != nil {
 					desc = *session.Description
 				}
-				s := &domain.Session{
+				sess := &domain.Session{
 					RoomID:              domainRoomID,
 					SessionizeSessionID: session.ID,
 					Title:               session.Title,
@@ -99,7 +99,7 @@ func (uc *manageScheduleUseCase) ImportSessionizeData(ctx context.Context, event
 					UpdatedAt:           time.Now(),
 				}
 
-				if err := uc.sessionRepo.CreateSession(ctx, s); err != nil {
+				if err := s.sessionRepo.CreateSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to create session %s: %w", session.Title, err)
 				}
 			}
