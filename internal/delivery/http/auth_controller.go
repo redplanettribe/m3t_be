@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"multitrackticketing/internal/domain"
 	"net/http"
 	"regexp"
@@ -18,10 +17,46 @@ type SignUpRequest struct {
 	Role     string `json:"role"` // optional: "admin" or "attendee" (defaults to "attendee")
 }
 
+// Validate implements Validator.
+func (s SignUpRequest) Validate() []string {
+	var errs []string
+	email := strings.TrimSpace(strings.ToLower(s.Email))
+	if email == "" {
+		errs = append(errs, "email is required")
+	} else if !emailRegexp.MatchString(email) {
+		errs = append(errs, "invalid email format")
+	}
+	if s.Password == "" {
+		errs = append(errs, "password is required")
+	} else if len(s.Password) < 8 {
+		errs = append(errs, "password must be at least 8 characters")
+	}
+	role := strings.TrimSpace(strings.ToLower(s.Role))
+	if role == "atendee" {
+		role = "attendee"
+	}
+	if role != "" && role != "admin" && role != "attendee" {
+		errs = append(errs, "role must be \"admin\" or \"attendee\"")
+	}
+	return errs
+}
+
 // LoginRequest is the request body for POST /auth/login
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+// Validate implements Validator.
+func (l LoginRequest) Validate() []string {
+	var errs []string
+	if strings.TrimSpace(l.Email) == "" {
+		errs = append(errs, "email is required")
+	}
+	if l.Password == "" {
+		errs = append(errs, "password is required")
+	}
+	return errs
 }
 
 // LoginResponse is the response body for POST /auth/login
@@ -45,63 +80,35 @@ func NewAuthController(svc domain.AuthService) *AuthController {
 // @Accept json
 // @Produce json
 // @Param body body SignUpRequest true "Sign-up data"
-// @Success 201 {object} domain.User
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Success 201 {object} APIResponse "data contains the created user"
+// @Failure 400 {object} APIResponse "error.code: bad_request"
+// @Failure 500 {object} APIResponse "error.code: internal_error"
 // @Router /auth/signup [post]
 func (c *AuthController) SignUp(w http.ResponseWriter, r *http.Request) {
 	var req SignUpRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	email := strings.TrimSpace(strings.ToLower(req.Email))
-	if email == "" {
-		http.Error(w, "email is required", http.StatusBadRequest)
-		return
-	}
-	if !emailRegexp.MatchString(email) {
-		http.Error(w, "invalid email format", http.StatusBadRequest)
-		return
-	}
-	if req.Password == "" {
-		http.Error(w, "password is required", http.StatusBadRequest)
-		return
-	}
-	if len(req.Password) < 8 {
-		http.Error(w, "password must be at least 8 characters", http.StatusBadRequest)
-		return
-	}
-
 	role := strings.TrimSpace(strings.ToLower(req.Role))
 	if role == "atendee" {
 		role = "attendee"
 	}
-	if role != "" && role != "admin" && role != "attendee" {
-		http.Error(w, "role must be \"admin\" or \"attendee\"", http.StatusBadRequest)
-		return
-	}
-
 	user, err := c.Service.SignUp(r.Context(), email, req.Password, req.Name, role)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "already exists") {
-			http.Error(w, "email already registered", http.StatusBadRequest)
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeBadRequest, "email already registered")
 			return
 		}
 		if strings.Contains(err.Error(), "invalid email") || strings.Contains(err.Error(), "password must be") {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeBadRequest, err.Error())
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	WriteJSONSuccess(w, http.StatusCreated, user)
 }
 
 // Login godoc
@@ -111,40 +118,25 @@ func (c *AuthController) SignUp(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param body body LoginRequest true "Login credentials"
-// @Success 200 {object} LoginResponse
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Success 200 {object} APIResponse "data contains token and token_type"
+// @Failure 400 {object} APIResponse "error.code: bad_request"
+// @Failure 401 {object} APIResponse "error.code: unauthorized"
+// @Failure 500 {object} APIResponse "error.code: internal_error"
 // @Router /auth/login [post]
 func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !DecodeAndValidate(w, r, &req) {
 		return
 	}
-
-	if strings.TrimSpace(req.Email) == "" {
-		http.Error(w, "email is required", http.StatusBadRequest)
-		return
-	}
-	if req.Password == "" {
-		http.Error(w, "password is required", http.StatusBadRequest)
-		return
-	}
-
 	token, err := c.Service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid credentials") {
-			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			WriteJSONError(w, http.StatusUnauthorized, ErrCodeUnauthorized, "invalid credentials")
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(LoginResponse{Token: token, TokenType: "Bearer"})
+	WriteJSONSuccess(w, http.StatusOK, LoginResponse{Token: token, TokenType: "Bearer"})
 }

@@ -115,13 +115,19 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 			ctrl.CreateEvent(rr, req)
 
 			require.Equal(t, tt.wantStatus, rr.Code, "status code")
-			if tt.wantBodySubstr != "" {
-				assert.Contains(t, rr.Body.String(), tt.wantBodySubstr, "response body")
-			}
-			if tt.decodeEvent && tt.wantStatus == http.StatusCreated {
+			var envelope APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
+			if tt.wantStatus == http.StatusCreated && tt.decodeEvent {
+				require.Nil(t, envelope.Error, "success response must have error nil")
+				dataBytes, err := json.Marshal(envelope.Data)
+				require.NoError(t, err)
 				var event domain.Event
-				require.NoError(t, json.NewDecoder(rr.Body).Decode(&event))
+				require.NoError(t, json.Unmarshal(dataBytes, &event))
 				tt.checkEvent(t, event)
+			}
+			if tt.wantStatus != http.StatusCreated && tt.wantBodySubstr != "" {
+				require.NotNil(t, envelope.Error, "error response must have error set")
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
 			}
 		})
 	}
@@ -192,11 +198,18 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 			ctrl.ImportSessionize(rr, req)
 
 			require.Equal(t, tt.wantStatus, rr.Code, "status code")
-			assert.Contains(t, rr.Body.String(), tt.wantBodySubstr, "response body")
-			if tt.wantStatus == http.StatusOK && tt.wantStatusJSON != "" {
-				var out map[string]string
-				require.NoError(t, json.NewDecoder(rr.Body).Decode(&out))
-				assert.Equal(t, tt.wantStatusJSON, out["status"])
+			var envelope APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
+			if tt.wantStatus == http.StatusOK {
+				require.Nil(t, envelope.Error, "success response must have error nil")
+				if tt.wantStatusJSON != "" {
+					dataMap, ok := envelope.Data.(map[string]interface{})
+					require.True(t, ok, "data must be object")
+					assert.Equal(t, tt.wantStatusJSON, dataMap["status"], "data.status")
+				}
+			} else {
+				require.NotNil(t, envelope.Error, "error response must have error set")
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
 			}
 		})
 	}

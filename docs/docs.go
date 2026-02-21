@@ -41,36 +41,27 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "data contains token and token_type",
                         "schema": {
-                            "$ref": "#/definitions/http.LoginResponse"
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "error.code: bad_request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "error.code: unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "error.code: internal_error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     }
                 }
@@ -102,27 +93,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "data contains the created user",
                         "schema": {
-                            "$ref": "#/definitions/domain.User"
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "error.code: bad_request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "error.code: internal_error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     }
                 }
@@ -154,27 +139,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "data contains the created event",
                         "schema": {
-                            "$ref": "#/definitions/domain.Event"
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "error.code: bad_request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "error.code: internal_error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     }
                 }
@@ -205,21 +184,21 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "data contains status message",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "error.code: bad_request",
+                        "schema": {
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "error.code: internal_error",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/http.APIResponse"
                         }
                     }
                 }
@@ -227,43 +206,23 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "domain.Event": {
+        "http.APIError": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "code": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "updated_at": {
+                "message": {
                     "type": "string"
                 }
             }
         },
-        "domain.User": {
+        "http.APIResponse": {
             "type": "object",
             "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/http.APIError"
                 }
             }
         },
@@ -285,17 +244,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.LoginResponse": {
-            "type": "object",
-            "properties": {
-                "token": {
-                    "type": "string"
-                },
-                "token_type": {
                     "type": "string"
                 }
             }

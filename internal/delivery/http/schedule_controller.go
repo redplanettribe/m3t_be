@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"multitrackticketing/internal/domain"
 	"net/http"
 )
@@ -10,6 +9,18 @@ import (
 type CreateEventRequest struct {
 	Name string `json:"name"`
 	Slug string `json:"slug"`
+}
+
+// Validate implements Validator. Returns error messages for required and format rules.
+func (c CreateEventRequest) Validate() []string {
+	var errs []string
+	if c.Name == "" {
+		errs = append(errs, "name is required")
+	}
+	if c.Slug == "" {
+		errs = append(errs, "slug is required")
+	}
+	return errs
 }
 
 type ScheduleController struct {
@@ -29,37 +40,22 @@ func NewScheduleController(svc domain.ManageScheduleService) *ScheduleController
 // @Accept json
 // @Produce json
 // @Param event body CreateEventRequest true "Event data (name and slug only)"
-// @Success 201 {object} domain.Event
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Success 201 {object} APIResponse "data contains the created event"
+// @Failure 400 {object} APIResponse "error.code: bad_request"
+// @Failure 500 {object} APIResponse "error.code: internal_error"
 // @Router /events [post]
 func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var req CreateEventRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !DecodeAndValidate(w, r, &req) {
 		return
 	}
-
-	if req.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
-		return
-	}
-	if req.Slug == "" {
-		http.Error(w, "slug is required", http.StatusBadRequest)
-		return
-	}
-
 	event := &domain.Event{Name: req.Name, Slug: req.Slug}
 	if err := c.Service.CreateEvent(r.Context(), event); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(event)
+	WriteJSONSuccess(w, http.StatusCreated, event)
 }
 
 // ImportSessionize godoc
@@ -68,24 +64,23 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 // @Tags events
 // @Param eventID path string true "Event ID"
 // @Param sessionizeID path string true "Sessionize ID"
-// @Success 200 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Success 200 {object} APIResponse "data contains status message"
+// @Failure 400 {object} APIResponse "error.code: bad_request"
+// @Failure 500 {object} APIResponse "error.code: internal_error"
 // @Router /events/{eventID}/import/sessionize/{sessionizeID} [post]
 func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	sessionizeID := r.PathValue("sessionizeID")
 
 	if eventID == "" || sessionizeID == "" {
-		http.Error(w, "missing eventID or sessionizeID", http.StatusBadRequest)
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeBadRequest, "missing eventID or sessionizeID")
 		return
 	}
 
 	if err := c.Service.ImportSessionizeData(r.Context(), eventID, sessionizeID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "imported successfully"})
+	WriteJSONSuccess(w, http.StatusOK, map[string]string{"status": "imported successfully"})
 }

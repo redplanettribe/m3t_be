@@ -23,13 +23,12 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, Go conventions).
    - **Path params**: Use `r.PathValue("paramName")`.
    - **Request body (create/update)**:
      - Define a **request DTO** in the same package (e.g. `CreateEventRequest`) with only the fields the API accepts (e.g. `Name`, `Slug`). Do not decode into domain entities; domain fields like `id`, `created_at` are server-generated.
-     - Decode with `json.NewDecoder(r.Body)` and call `dec.DisallowUnknownFields()` before `dec.Decode(&req)` so that extra fields (e.g. `id`, `created_at`) result in 400.
-     - Validate required fields and format in the handler (e.g. non-empty name/slug); return 400 with a clear message via `http.Error(w, msg, http.StatusBadRequest)`.
+     - Use the same validation strategy for all handlers: call `DecodeAndValidate(w, r, &req)`; if it returns false, return immediately (it already wrote a 400 JSON error). Implement the `Validator` interface on the DTO: `Validate() []string` returning a slice of error messages (nil or empty when valid). See `internal/delivery/http/validate.go`. DecodeAndValidate uses `DisallowUnknownFields()` and runs Validate() when the DTO implements Validator; multiple validation errors are joined with "; " in one 400 response.
      - Build the domain entity from the DTO (e.g. `event := &domain.Event{Name: req.Name, Slug: req.Slug}`) and pass it to the service.
-   - Call the service; on error use `http.Error(w, err.Error(), http.StatusInternalServerError)`.
-   - On success: set `w.Header().Set("Content-Type", "application/json")`, `w.WriteHeader(status)`, then `json.NewEncoder(w).Encode(...)`.
+   - Call the service; on error return `WriteJSONError(w, status, code, message)` using `ErrCodeBadRequest`, `ErrCodeUnauthorized`, or `ErrCodeInternalError` as appropriate.
+   - On success return `WriteJSONSuccess(w, statusCode, data)`. All responses use the standardized envelope (`APIResponse`: `data` + `error`); see `internal/delivery/http/response.go`.
 
-4. **Swagger**: Add a swaggo comment block above the handler: `// HandlerName godoc`, then `@Summary`, `@Description`, `@Tags`, `@Accept`/`@Produce`, `@Param`, `@Success`, `@Failure`, `@Router` (path with `{paramName}`). For JSON body params use the **request DTO type** (e.g. `CreateEventRequest`), not the domain entity, so the docs show only accepted fields.
+4. **Swagger**: Add a swaggo comment block above the handler: `// HandlerName godoc`, then `@Summary`, `@Description`, `@Tags`, `@Accept`/`@Produce`, `@Param`, `@Success`, `@Failure`, `@Router` (path with `{paramName}`). For JSON body params use the **request DTO type** (e.g. `CreateEventRequest`), not the domain entity. Use `{object} APIResponse` for `@Success` and `@Failure` so the docs describe the standardized envelope (e.g. `@Success 201 {object} APIResponse "data contains the created resource"`).
 
 5. **Router**: Register the route in `internal/delivery/http/router.go` with `mux.HandleFunc("METHOD /path/{param}", controller.HandlerName)`.
 

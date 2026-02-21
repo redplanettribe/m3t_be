@@ -1,30 +1,17 @@
 basePath: /
 definitions:
-  domain.Event:
+  http.APIError:
     properties:
-      created_at:
+      code:
         type: string
-      id:
-        type: string
-      name:
-        type: string
-      slug:
-        type: string
-      updated_at:
+      message:
         type: string
     type: object
-  domain.User:
+  http.APIResponse:
     properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      updated_at:
-        type: string
+      data: {}
+      error:
+        $ref: '#/definitions/http.APIError'
     type: object
   http.CreateEventRequest:
     properties:
@@ -38,13 +25,6 @@ definitions:
       email:
         type: string
       password:
-        type: string
-    type: object
-  http.LoginResponse:
-    properties:
-      token:
-        type: string
-      token_type:
         type: string
     type: object
   http.SignUpRequest:
@@ -83,27 +63,21 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: data contains token and token_type
           schema:
-            $ref: '#/definitions/http.LoginResponse'
+            $ref: '#/definitions/http.APIResponse'
         "400":
-          description: Bad Request
+          description: 'error.code: bad_request'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
         "401":
-          description: Unauthorized
+          description: 'error.code: unauthorized'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
         "500":
-          description: Internal Server Error
+          description: 'error.code: internal_error'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
       summary: Log in
       tags:
       - auth
@@ -124,21 +98,17 @@ paths:
       - application/json
       responses:
         "201":
-          description: Created
+          description: data contains the created user
           schema:
-            $ref: '#/definitions/domain.User'
+            $ref: '#/definitions/http.APIResponse'
         "400":
-          description: Bad Request
+          description: 'error.code: bad_request'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
         "500":
-          description: Internal Server Error
+          description: 'error.code: internal_error'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
       summary: Sign up a new user
       tags:
       - auth
@@ -159,21 +129,17 @@ paths:
       - application/json
       responses:
         "201":
-          description: Created
+          description: data contains the created event
           schema:
-            $ref: '#/definitions/domain.Event'
+            $ref: '#/definitions/http.APIResponse'
         "400":
-          description: Bad Request
+          description: 'error.code: bad_request'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
         "500":
-          description: Internal Server Error
+          description: 'error.code: internal_error'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
       summary: Create a new event
       tags:
       - events
@@ -193,17 +159,17 @@ paths:
         type: string
       responses:
         "200":
-          description: OK
+          description: data contains status message
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/http.APIResponse'
         "500":
-          description: Internal Server Error
+          description: 'error.code: internal_error'
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/http.APIResponse'
       summary: Import schedule from Sessionize
       tags:
       - events
