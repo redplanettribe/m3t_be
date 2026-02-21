@@ -6,6 +6,12 @@ import (
 	"net/http"
 )
 
+// CreateEventRequest is the request body for POST /events. Only name and slug are accepted.
+type CreateEventRequest struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
 type ScheduleController struct {
 	Service domain.ManageScheduleService
 }
@@ -18,23 +24,35 @@ func NewScheduleController(svc domain.ManageScheduleService) *ScheduleController
 
 // CreateEvent godoc
 // @Summary Create a new event
-// @Description Create a new conference event
+// @Description Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated.
 // @Tags events
 // @Accept json
 // @Produce json
-// @Param event body domain.Event true "Event Data"
+// @Param event body CreateEventRequest true "Event data (name and slug only)"
 // @Success 201 {object} domain.Event
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /events [post]
 func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
-	var event domain.Event
-	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+	var req CreateEventRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := c.Service.CreateEvent(r.Context(), &event); err != nil {
+	if req.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if req.Slug == "" {
+		http.Error(w, "slug is required", http.StatusBadRequest)
+		return
+	}
+
+	event := &domain.Event{Name: req.Name, Slug: req.Slug}
+	if err := c.Service.CreateEvent(r.Context(), event); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

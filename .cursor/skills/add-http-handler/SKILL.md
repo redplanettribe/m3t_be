@@ -20,12 +20,16 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, Go conventions).
 2. **Service**: Implement the method in the appropriate service (e.g. `internal/services/manage_schedule.go`). Use `context.Context`, wrap errors with `fmt.Errorf(..., %w, err)`.
 
 3. **Controller**: Add a handler method on the controller (e.g. `ScheduleController` in `internal/delivery/http/schedule_controller.go`):
-   - Use `r.PathValue("paramName")` for path parameters.
-   - Validate input; return 400 via `http.Error(w, msg, http.StatusBadRequest)` for bad/missing input.
+   - **Path params**: Use `r.PathValue("paramName")`.
+   - **Request body (create/update)**:
+     - Define a **request DTO** in the same package (e.g. `CreateEventRequest`) with only the fields the API accepts (e.g. `Name`, `Slug`). Do not decode into domain entities; domain fields like `id`, `created_at` are server-generated.
+     - Decode with `json.NewDecoder(r.Body)` and call `dec.DisallowUnknownFields()` before `dec.Decode(&req)` so that extra fields (e.g. `id`, `created_at`) result in 400.
+     - Validate required fields and format in the handler (e.g. non-empty name/slug); return 400 with a clear message via `http.Error(w, msg, http.StatusBadRequest)`.
+     - Build the domain entity from the DTO (e.g. `event := &domain.Event{Name: req.Name, Slug: req.Slug}`) and pass it to the service.
    - Call the service; on error use `http.Error(w, err.Error(), http.StatusInternalServerError)`.
    - On success: set `w.Header().Set("Content-Type", "application/json")`, `w.WriteHeader(status)`, then `json.NewEncoder(w).Encode(...)`.
 
-4. **Swagger**: Add a swaggo comment block above the handler: `// HandlerName godoc`, then `@Summary`, `@Description`, `@Tags`, `@Accept`/`@Produce`, `@Param`, `@Success`, `@Failure`, `@Router` (path with `{paramName}`).
+4. **Swagger**: Add a swaggo comment block above the handler: `// HandlerName godoc`, then `@Summary`, `@Description`, `@Tags`, `@Accept`/`@Produce`, `@Param`, `@Success`, `@Failure`, `@Router` (path with `{paramName}`). For JSON body params use the **request DTO type** (e.g. `CreateEventRequest`), not the domain entity, so the docs show only accepted fields.
 
 5. **Router**: Register the route in `internal/delivery/http/router.go` with `mux.HandleFunc("METHOD /path/{param}", controller.HandlerName)`.
 

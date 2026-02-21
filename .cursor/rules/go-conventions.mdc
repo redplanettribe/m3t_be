@@ -18,9 +18,16 @@ alwaysApply: false
 - **Service**: Wrap with `fmt.Errorf("context: %w", err)` so callers can use `errors.Is`/`errors.As`.
 - **Delivery**: Use `http.Error(w, err.Error(), status)`; no custom JSON error envelope. 400 for bad input (e.g. invalid body, missing path param), 500 for service/repo failures.
 
+## Request bodies (create/update)
+
+- Use a **request DTO** struct (e.g. `CreateEventRequest`) with only the fields the API accepts; do not decode into domain entities (id, created_at, etc. are server-generated).
+- Use `json.NewDecoder(r.Body)` and `dec.DisallowUnknownFields()` before decode so unknown fields return 400.
+- Validate required fields and format in the handler; return 400 with a clear message. Map the DTO to the domain entity before calling the service.
+
 ## Swagger (swaggo)
 
 - Above each handler: `// HandlerName godoc` then `@Summary`, `@Description`, `@Tags`, `@Accept`/`@Produce`, `@Param`, `@Success`, `@Failure`, `@Router`.
+- For body params use the request DTO type (e.g. `CreateEventRequest`) so the spec shows only accepted fields.
 - After changing API routes or handler docs, run `make swag` to regenerate `docs/`.
 
 Reference: @internal/delivery/http/schedule_controller.go

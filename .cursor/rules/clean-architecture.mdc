@@ -16,7 +16,7 @@ Dependency flow: `cmd` → `delivery` → `services` → `domain`; `repository` 
 
 - **client** (`internal/client/<name>`, e.g. `internal/client/sessionize`): Implements domain ports for **external services** (APIs, etc.). Unexported struct, constructor returns `domain.XxxFetcher` (or similar). Service receives the interface from domain; only `cmd` instantiates the concrete client.
 
-- **delivery/http** (`internal/delivery/http`): HTTP handlers and router. Depends on service via domain interfaces (e.g. `domain.ManageScheduleService`). Uses `http.ServeMux`, `r.PathValue("param")` for path params. Document handlers with swaggo comments.
+- **delivery/http** (`internal/delivery/http`): HTTP handlers and router. Depends on service via domain interfaces (e.g. `domain.ManageScheduleService`). Uses `http.ServeMux`, `r.PathValue("param")` for path params. For JSON request bodies use **request DTOs** (e.g. `CreateEventRequest`) that expose only the fields the API accepts; decode with `DisallowUnknownFields()` and validate in the handler; do not decode directly into domain entities. Document handlers with swaggo comments.
 
 Wire dependencies in `cmd/api/main.go`: DB → repos; instantiate clients (e.g. Sessionize); service (repos + client + timeout) → controller → `NewRouter(controller)`.
 

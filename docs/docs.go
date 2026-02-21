@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/events": {
             "post": {
-                "description": "Create a new conference event",
+                "description": "Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated.",
                 "consumes": [
                     "application/json"
                 ],
@@ -30,12 +30,12 @@ const docTemplate = `{
                 "summary": "Create a new event",
                 "parameters": [
                     {
-                        "description": "Event Data",
+                        "description": "Event data (name and slug only)",
                         "name": "event",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.Event"
+                            "$ref": "#/definitions/http.CreateEventRequest"
                         }
                     }
                 ],
@@ -130,6 +130,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.CreateEventRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
                     "type": "string"
                 }
             }
