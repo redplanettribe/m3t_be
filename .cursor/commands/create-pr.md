@@ -1,9 +1,11 @@
 # Create PR
 
 ## Overview
+
 Create a well-structured pull request with proper description, labels, and reviewers.
 
 ## Steps
+
 1. **Prepare branch**
    - Ensure all changes are committed
    - Push branch to remote
@@ -23,6 +25,7 @@ Create a well-structured pull request with proper description, labels, and revie
    - If the PR changes API or handlers, confirm Swagger was regenerated (`make swag`) and mention it in the description.
 
 ## PR Template
+
 - [ ] Feature A
 - [ ] Bug fix B
 - [ ] Unit tests pass

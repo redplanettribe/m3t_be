@@ -1,9 +1,11 @@
 # Run All Tests and Fix Failures
 
 ## Overview
+
 Execute the full test suite and systematically fix any failures, ensuring code quality and functionality.
 
 ## Steps
+
 1. **Run test suite**
    - Execute all tests in the project
    - In this project run `go test ./...` from the repo root. Prefer table-driven tests when adding or fixing tests; follow patterns in `.cursor/rules/` (Go conventions, error wrapping with `%w`).

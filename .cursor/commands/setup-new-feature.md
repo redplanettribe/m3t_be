@@ -1,9 +1,11 @@
 # Setup New Feature
 
 ## Overview
+
 Systematically set up a new feature from initial planning through to implementation structure.
 
 ## Steps
+
 1. **Define requirements**
    - Clarify feature scope and goals
    - Identify user stories and acceptance criteria
@@ -27,11 +29,11 @@ Systematically set up a new feature from initial planning through to implementat
 
 6. **Verify all the tests pass**
    - Make sure all the tests pass
-   
 7. **Update necesary documentation**
    -Update our feature documentation
 
 ## Feature Setup Checklist
+
 - [ ] Requirements documented
 - [ ] User stories written
 - [ ] Technical approach planned

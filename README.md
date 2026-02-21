@@ -3,28 +3,34 @@
 This repository contains the backend API for the Multi-Track Ticketing system.
 
 ## 🤖 AI Agent Context & Rules
+
 **If you are an AI assistant working on this codebase, please strictly adhere to the following rules:**
 
 ### 1. Technology Stack
+
 - **Language**: Golang (Latest version)
 - **Database**: PostgreSQL
 - **ORM**: **NO ORM**. Use `database/sql` with raw SQL queries.
 - **Migrations**: `golang-migrate`
 - **Documentation**: Swagger/OpenAPI (using `swaggo`)
-- **Transport**: Standard `net/http` 
+- **Transport**: Standard `net/http`
 
 ### 2. Architecture: Clean Architecture
+
 We adhere to a strict **Clean Architecture** separation of concerns.
+
 - **`internal/domain`**: Entities and Interface Definitions (Repository, UseCase). **No external dependencies** (except time/context).
 - **`internal/usecase`**: Business logic. Depends only on `domain`.
 - **`internal/repository`**: Data access implementation (e.g., `postgres`). Depends on `domain`.
 - **`internal/delivery`**: Transport layer (e.g., `http`). Depends on `usecase`.
 
 ### 3. Workflow
+
 - **Migrations**: Always create up/down migration files in `migrations/` for DB schema changes.
 - **Tests**: (Future) Table-driven tests preferred.
 
 ### 4. Cursor rules and skills
+
 - **`.cursor/rules/`**: Project rules (Clean Architecture, Go conventions, migrations) applied by file scope in Cursor.
 - **`.cursor/skills/`**: Workflow skills for adding HTTP handlers, repositories, migrations, and regenerating Swagger.
 
@@ -54,15 +60,18 @@ We adhere to a strict **Clean Architecture** separation of concerns.
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Go 1.26+
 - Docker & Docker Compose
 - Make
 
 ### Running Locally
+
 We have a convenient Makefile to handle the developer workflow.
 
 1. **Start Environment (DB + App)**
    This will start Postgres in Docker, run migrations, and start the API.
+
    ```bash
    make start-dev
    ```
@@ -74,5 +83,6 @@ We have a convenient Makefile to handle the developer workflow.
    - `make swag`: Regenerate Swagger documentation.
 
 ### 📚 Documentation
+
 Once running, Swagger UI is available at:
 [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
