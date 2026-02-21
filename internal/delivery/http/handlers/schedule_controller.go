@@ -1,8 +1,11 @@
-package http
+package handlers
 
 import (
+	"log/slog"
+	h "multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/domain"
 	"net/http"
+	"time"
 )
 
 // CreateEventRequest is the request body for POST /events. Only name and slug are accepted.
@@ -24,11 +27,13 @@ func (c CreateEventRequest) Validate() []string {
 }
 
 type ScheduleController struct {
+	Logger  *slog.Logger
 	Service domain.ManageScheduleService
 }
 
-func NewScheduleController(svc domain.ManageScheduleService) *ScheduleController {
+func NewScheduleController(logger *slog.Logger, svc domain.ManageScheduleService) *ScheduleController {
 	return &ScheduleController{
+		Logger:  logger,
 		Service: svc,
 	}
 }
@@ -46,16 +51,18 @@ func NewScheduleController(svc domain.ManageScheduleService) *ScheduleController
 // @Router /events [post]
 func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var req CreateEventRequest
-	if !DecodeAndValidate(w, r, &req) {
+	if !h.DecodeAndValidate(w, r, &req) {
 		return
 	}
-	event := &domain.Event{Name: req.Name, Slug: req.Slug}
+	now := time.Now()
+	event := domain.NewEvent(req.Name, req.Slug, now, now)
 	if err := c.Service.CreateEvent(r.Context(), event); err != nil {
-		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	WriteJSONSuccess(w, http.StatusCreated, event)
+	h.WriteJSONSuccess(w, http.StatusCreated, event)
 }
 
 // ImportSessionize godoc
@@ -73,14 +80,15 @@ func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Req
 	sessionizeID := r.PathValue("sessionizeID")
 
 	if eventID == "" || sessionizeID == "" {
-		WriteJSONError(w, http.StatusBadRequest, ErrCodeBadRequest, "missing eventID or sessionizeID")
+		h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, "missing eventID or sessionizeID")
 		return
 	}
 
 	if err := c.Service.ImportSessionizeData(r.Context(), eventID, sessionizeID); err != nil {
-		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	WriteJSONSuccess(w, http.StatusOK, map[string]string{"status": "imported successfully"})
+	h.WriteJSONSuccess(w, http.StatusOK, map[string]string{"status": "imported successfully"})
 }

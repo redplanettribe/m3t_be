@@ -11,7 +11,7 @@ alwaysApply: false
 - Constructors: `NewXxx` (e.g. `NewEventRepository`, `NewScheduleController`).
 - Repo/service structs: unexported; constructor returns domain interface.
 - Controllers: exported struct (e.g. `ScheduleController`).
-- Repo files: `*_repo.go` in `internal/repository/postgres/`. HTTP: `*_controller.go`, `router.go` in `internal/delivery/http/`.
+- Repo files: `*_repo.go` in `internal/repository/postgres/`. HTTP: `*_controller.go` in `internal/delivery/http/controllers/`; `router.go` in `internal/delivery/http/`; response/validate helpers in `internal/delivery/http/helpers/`; middleware in `internal/delivery/http/middleware/`.
 
 ## Errors
 
@@ -30,4 +30,8 @@ alwaysApply: false
 - For body params use the request DTO type (e.g. `CreateEventRequest`) so the spec shows only accepted fields.
 - After changing API routes or handler docs, run `make swag` to regenerate `docs/`.
 
-Reference: @internal/delivery/http/schedule_controller.go
+## Logging
+
+- Logging: see [logging.mdc](logging.mdc).
+
+Reference: @internal/delivery/http/controllers/schedule_controller.go

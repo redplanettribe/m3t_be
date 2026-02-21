@@ -1,33 +1,20 @@
 basePath: /
 definitions:
-  http.APIError:
-    properties:
-      code:
-        type: string
-      message:
-        type: string
-    type: object
-  http.APIResponse:
-    properties:
-      data: {}
-      error:
-        $ref: '#/definitions/http.APIError'
-    type: object
-  http.CreateEventRequest:
+  controllers.CreateEventRequest:
     properties:
       name:
         type: string
       slug:
         type: string
     type: object
-  http.LoginRequest:
+  controllers.LoginRequest:
     properties:
       email:
         type: string
       password:
         type: string
     type: object
-  http.SignUpRequest:
+  controllers.SignUpRequest:
     properties:
       email:
         type: string
@@ -38,6 +25,19 @@ definitions:
       role:
         description: 'optional: "admin" or "attendee" (defaults to "attendee")'
         type: string
+    type: object
+  helpers.APIError:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  helpers.APIResponse:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/helpers.APIError'
     type: object
 host: localhost:8080
 info:
@@ -58,26 +58,26 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/http.LoginRequest'
+          $ref: '#/definitions/controllers.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: data contains token and token_type
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "401":
           description: 'error.code: unauthorized'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "500":
           description: 'error.code: internal_error'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
       summary: Log in
       tags:
       - auth
@@ -93,22 +93,22 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/http.SignUpRequest'
+          $ref: '#/definitions/controllers.SignUpRequest'
       produces:
       - application/json
       responses:
         "201":
           description: data contains the created user
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "500":
           description: 'error.code: internal_error'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
       summary: Sign up a new user
       tags:
       - auth
@@ -124,22 +124,22 @@ paths:
         name: event
         required: true
         schema:
-          $ref: '#/definitions/http.CreateEventRequest'
+          $ref: '#/definitions/controllers.CreateEventRequest'
       produces:
       - application/json
       responses:
         "201":
           description: data contains the created event
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "500":
           description: 'error.code: internal_error'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
       summary: Create a new event
       tags:
       - events
@@ -161,15 +161,15 @@ paths:
         "200":
           description: data contains status message
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
         "500":
           description: 'error.code: internal_error'
           schema:
-            $ref: '#/definitions/http.APIResponse'
+            $ref: '#/definitions/helpers.APIResponse'
       summary: Import schedule from Sessionize
       tags:
       - events

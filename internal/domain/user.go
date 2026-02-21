@@ -16,10 +16,40 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// NewUser returns a new User with the given fields. ID is typically set by the repository on create.
+func NewUser(email, passwordHash, salt, name string, createdAt, updatedAt time.Time) *User {
+	return &User{
+		Email:        email,
+		PasswordHash: passwordHash,
+		Salt:         salt,
+		Name:         name,
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+	}
+}
+
 // Role represents an application role (e.g. admin, attendee)
 type Role struct {
 	ID   string `json:"id"`
 	Code string `json:"code"`
+}
+
+// NewRole returns a new Role with the given id and code.
+func NewRole(id, code string) *Role {
+	return &Role{ID: id, Code: code}
+}
+
+// PasswordHasher handles salt generation, hashing, and verification.
+// Implementations may use bcrypt, argon2, etc.
+type PasswordHasher interface {
+	GenerateSalt() (string, error)
+	Hash(salt, password string) (hash string, err error)
+	Compare(hash, salt, password string) error
+}
+
+// TokenIssuer issues tokens (e.g. JWT) for an authenticated user.
+type TokenIssuer interface {
+	Issue(userID, email string, roles []string, expiry time.Duration) (string, error)
 }
 
 // UserRepository defines the interface for user storage

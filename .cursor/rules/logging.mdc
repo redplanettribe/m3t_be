@@ -1,0 +1,28 @@
+---
+description: Logging strategy — slog, where to log, structured keys, wiring
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Logging
+
+Use **stdlib `log/slog`** only (no third-party logger).
+
+## Where to log
+
+- **cmd** (`cmd/api`): Startup, shutdown, fatal conditions. Obtain the logger via `config.NewLogger()`; pass it to delivery and to `config.Load(logger)`.
+- **delivery/http**: Request logging via **logging middleware** (method, path, status, duration). Controllers receive a logger from `cmd` and use it to log errors when returning **5xx** (in addition to `WriteJSONError`).
+- **domain** and **services**: No logging. Errors are returned and logged at the edge (delivery).
+- **repository**: No logging by default. If needed later (e.g. slow queries), introduce a **Logger interface in domain** and inject it from `cmd` so the repository stays free of concrete logging packages.
+
+## How to log
+
+- Use **structured** key-value pairs (e.g. `logger.Info("msg", "key", value)`).
+- In handlers when logging 5xx, use `ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)`.
+- Do **not** log request or response bodies (PII, secrets). Prefer logging IDs (e.g. request_id, event_id) where useful.
+
+## Wiring
+
+- In `cmd/api/main.go`: Obtain logger with `config.NewLogger()` (implementation in `config/logger.go`, reads `GO_ENV` and `LOG_LEVEL`). Pass to `config.Load(logger)`, to `middleware.LoggingMiddleware(logger, mux)`, and to controller constructors `NewScheduleController(logger, svc)`, `NewAuthController(logger, svc)`.
+
+Reference: @config/logger.go @internal/delivery/http/middleware/logging.go @internal/delivery/http/controllers/schedule_controller.go @cmd/api/main.go

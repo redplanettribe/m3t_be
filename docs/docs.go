@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.LoginRequest"
+                            "$ref": "#/definitions/controllers.LoginRequest"
                         }
                     }
                 ],
@@ -43,25 +43,25 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains token and token_type",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "400": {
                         "description": "error.code: bad_request",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "401": {
                         "description": "error.code: unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "500": {
                         "description": "error.code: internal_error",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     }
                 }
@@ -87,7 +87,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.SignUpRequest"
+                            "$ref": "#/definitions/controllers.SignUpRequest"
                         }
                     }
                 ],
@@ -95,19 +95,19 @@ const docTemplate = `{
                     "201": {
                         "description": "data contains the created user",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "400": {
                         "description": "error.code: bad_request",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "500": {
                         "description": "error.code: internal_error",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     }
                 }
@@ -133,7 +133,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/http.CreateEventRequest"
+                            "$ref": "#/definitions/controllers.CreateEventRequest"
                         }
                     }
                 ],
@@ -141,19 +141,19 @@ const docTemplate = `{
                     "201": {
                         "description": "data contains the created event",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "400": {
                         "description": "error.code: bad_request",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "500": {
                         "description": "error.code: internal_error",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     }
                 }
@@ -186,19 +186,19 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains status message",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "400": {
                         "description": "error.code: bad_request",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
                     "500": {
                         "description": "error.code: internal_error",
                         "schema": {
-                            "$ref": "#/definitions/http.APIResponse"
+                            "$ref": "#/definitions/helpers.APIResponse"
                         }
                     }
                 }
@@ -206,27 +206,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "http.APIError": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "http.APIResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "error": {
-                    "$ref": "#/definitions/http.APIError"
-                }
-            }
-        },
-        "http.CreateEventRequest": {
+        "controllers.CreateEventRequest": {
             "type": "object",
             "properties": {
                 "name": {
@@ -237,7 +217,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.LoginRequest": {
+        "controllers.LoginRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -248,7 +228,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.SignUpRequest": {
+        "controllers.SignUpRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -263,6 +243,26 @@ const docTemplate = `{
                 "role": {
                     "description": "optional: \"admin\" or \"attendee\" (defaults to \"attendee\")",
                     "type": "string"
+                }
+            }
+        },
+        "helpers.APIError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "helpers.APIResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
                 }
             }
         }

@@ -1,6 +1,8 @@
-package http
+package controllers
 
 import (
+	"log/slog"
+	h "multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/domain"
 	"net/http"
 	"regexp"
@@ -66,11 +68,15 @@ type LoginResponse struct {
 }
 
 type AuthController struct {
+	Logger  *slog.Logger
 	Service domain.AuthService
 }
 
-func NewAuthController(svc domain.AuthService) *AuthController {
-	return &AuthController{Service: svc}
+func NewAuthController(logger *slog.Logger, svc domain.AuthService) *AuthController {
+	return &AuthController{
+		Logger:  logger,
+		Service: svc,
+	}
 }
 
 // SignUp godoc
@@ -80,13 +86,13 @@ func NewAuthController(svc domain.AuthService) *AuthController {
 // @Accept json
 // @Produce json
 // @Param body body SignUpRequest true "Sign-up data"
-// @Success 201 {object} APIResponse "data contains the created user"
-// @Failure 400 {object} APIResponse "error.code: bad_request"
-// @Failure 500 {object} APIResponse "error.code: internal_error"
+// @Success 201 {object} helpers.APIResponse "data contains the created user"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /auth/signup [post]
 func (c *AuthController) SignUp(w http.ResponseWriter, r *http.Request) {
 	var req SignUpRequest
-	if !DecodeAndValidate(w, r, &req) {
+	if !h.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	email := strings.TrimSpace(strings.ToLower(req.Email))
@@ -97,18 +103,19 @@ func (c *AuthController) SignUp(w http.ResponseWriter, r *http.Request) {
 	user, err := c.Service.SignUp(r.Context(), email, req.Password, req.Name, role)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "already exists") {
-			WriteJSONError(w, http.StatusBadRequest, ErrCodeBadRequest, "email already registered")
+			h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, "email already registered")
 			return
 		}
 		if strings.Contains(err.Error(), "invalid email") || strings.Contains(err.Error(), "password must be") {
-			WriteJSONError(w, http.StatusBadRequest, ErrCodeBadRequest, err.Error())
+			h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, err.Error())
 			return
 		}
-		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	WriteJSONSuccess(w, http.StatusCreated, user)
+	h.WriteJSONSuccess(w, http.StatusCreated, user)
 }
 
 // Login godoc
@@ -118,25 +125,26 @@ func (c *AuthController) SignUp(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param body body LoginRequest true "Login credentials"
-// @Success 200 {object} APIResponse "data contains token and token_type"
-// @Failure 400 {object} APIResponse "error.code: bad_request"
-// @Failure 401 {object} APIResponse "error.code: unauthorized"
-// @Failure 500 {object} APIResponse "error.code: internal_error"
+// @Success 200 {object} helpers.APIResponse "data contains token and token_type"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /auth/login [post]
 func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if !DecodeAndValidate(w, r, &req) {
+	if !h.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	token, err := c.Service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid credentials") {
-			WriteJSONError(w, http.StatusUnauthorized, ErrCodeUnauthorized, "invalid credentials")
+			h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "invalid credentials")
 			return
 		}
-		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternalError, err.Error())
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	WriteJSONSuccess(w, http.StatusOK, LoginResponse{Token: token, TokenType: "Bearer"})
+	h.WriteJSONSuccess(w, http.StatusOK, LoginResponse{Token: token, TokenType: "Bearer"})
 }

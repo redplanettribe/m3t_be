@@ -3,11 +3,13 @@ package http
 import (
 	"net/http"
 
+	"multitrackticketing/internal/delivery/http/controllers"
+
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // NewRouter initializes the HTTP router with all application routes
-func NewRouter(scheduleController *ScheduleController, authController *AuthController) *http.ServeMux {
+func NewRouter(scheduleController *controllers.ScheduleController, authController *controllers.AuthController) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// API Routes

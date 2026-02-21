@@ -2,21 +2,15 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 	"multitrackticketing/internal/domain"
 )
 
 const (
-	bcryptCost     = 10
 	minPasswordLen = 8
 	defaultRole    = "attendee"
 )
@@ -24,19 +18,21 @@ const (
 var emailRegexp = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 type authService struct {
-	userRepo   domain.UserRepository
-	roleRepo   domain.RoleRepository
-	jwtSecret  []byte
-	jwtExpiry  time.Duration
+	userRepo       domain.UserRepository
+	roleRepo       domain.RoleRepository
+	passwordHasher domain.PasswordHasher
+	tokenIssuer    domain.TokenIssuer
+	tokenExpiry    time.Duration
 }
 
-// NewAuthService creates an AuthService with the given repositories and JWT config
-func NewAuthService(userRepo domain.UserRepository, roleRepo domain.RoleRepository, jwtSecret string, jwtExpiry time.Duration) domain.AuthService {
+// NewAuthService creates an AuthService with the given repositories and auth ports.
+func NewAuthService(userRepo domain.UserRepository, roleRepo domain.RoleRepository, passwordHasher domain.PasswordHasher, tokenIssuer domain.TokenIssuer, tokenExpiry time.Duration) domain.AuthService {
 	return &authService{
-		userRepo:  userRepo,
-		roleRepo:  roleRepo,
-		jwtSecret: []byte(jwtSecret),
-		jwtExpiry: jwtExpiry,
+		userRepo:       userRepo,
+		roleRepo:       roleRepo,
+		passwordHasher: passwordHasher,
+		tokenIssuer:    tokenIssuer,
+		tokenExpiry:    tokenExpiry,
 	}
 }
 
@@ -54,29 +50,17 @@ func (s *authService) SignUp(ctx context.Context, email, password, name, role st
 		roleCode = defaultRole
 	}
 
-	saltBytes := make([]byte, 32)
-	if _, err := rand.Read(saltBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate salt: %w", err)
-	}
-	salt := hex.EncodeToString(saltBytes)
-
-	saltedInput := salt + password
-	sum := sha256.Sum256([]byte(saltedInput))
-	bcryptInput := hex.EncodeToString(sum[:])
-	hash, err := bcrypt.GenerateFromPassword([]byte(bcryptInput), bcryptCost)
+	salt, err := s.passwordHasher.GenerateSalt()
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, err
+	}
+	hash, err := s.passwordHasher.Hash(salt, password)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
-	user := &domain.User{
-		Email:        email,
-		PasswordHash: string(hash),
-		Salt:         salt,
-		Name:         strings.TrimSpace(name),
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
+	user := domain.NewUser(email, hash, salt, strings.TrimSpace(name), now, now)
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -92,21 +76,12 @@ func (s *authService) SignUp(ctx context.Context, email, password, name, role st
 	return user, nil
 }
 
-type jwtClaims struct {
-	jwt.RegisteredClaims
-	Email string   `json:"email"`
-	Roles []string `json:"roles"`
-}
-
 func (s *authService) Login(ctx context.Context, email, password string) (string, error) {
 	user, err := s.userRepo.GetByEmail(ctx, strings.TrimSpace(strings.ToLower(email)))
 	if err != nil {
 		return "", fmt.Errorf("invalid credentials")
 	}
-	saltedInput := user.Salt + password
-	sum := sha256.Sum256([]byte(saltedInput))
-	bcryptInput := hex.EncodeToString(sum[:])
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(bcryptInput)); err != nil {
+	if err := s.passwordHasher.Compare(user.PasswordHash, user.Salt, password); err != nil {
 		return "", fmt.Errorf("invalid credentials")
 	}
 
@@ -119,20 +94,9 @@ func (s *authService) Login(ctx context.Context, email, password string) (string
 		roleCodes[i] = r.Code
 	}
 
-	now := time.Now()
-	claims := jwtClaims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   user.ID,
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiry)),
-		},
-		Email: user.Email,
-		Roles: roleCodes,
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(s.jwtSecret)
+	token, err := s.tokenIssuer.Issue(user.ID, user.Email, roleCodes, s.tokenExpiry)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
-	return tokenString, nil
+	return token, nil
 }

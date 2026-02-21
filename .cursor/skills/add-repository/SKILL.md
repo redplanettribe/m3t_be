@@ -28,4 +28,8 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, Go conventions).
 
 ## External services
 
-For dependencies on **external APIs** (e.g. Sessionize, payment providers): define the port interface and response DTO in `internal/domain`, implement the adapter in `internal/client/<name>` (e.g. `internal/client/sessionize`), and wire the implementation in `cmd/api/main.go` like repositories. The service receives the domain interface only. See `.cursor/rules/clean-architecture.mdc` for the client layer.
+For dependencies on **external APIs** (e.g. Sessionize, payment providers): define the port interface and response DTO in `internal/domain`, implement the adapter in `internal/adapters/<name>` (e.g. `internal/adapters/sessionize`), and wire the implementation in `cmd/api/main.go` like repositories. The service receives the domain interface only. See `.cursor/rules/clean-architecture.mdc` for the external service adapters layer.
+
+## Logging
+
+- Logging: see [.cursor/skills/logging/SKILL.md](.cursor/skills/logging/SKILL.md) or [logging.mdc](.cursor/rules/logging.mdc) (no logging in repos by default).

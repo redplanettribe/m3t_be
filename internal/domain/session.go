@@ -15,6 +15,17 @@ type Room struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
+// NewRoom returns a new Room with the given fields. ID is typically set by the repository on create.
+func NewRoom(eventID, name string, sessionizeRoomID int, createdAt, updatedAt time.Time) *Room {
+	return &Room{
+		EventID:          eventID,
+		Name:             name,
+		SessionizeRoomID: sessionizeRoomID,
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
+	}
+}
+
 // Session represents a conference session or talk
 type Session struct {
 	ID                  string    `json:"id"`
@@ -26,6 +37,20 @@ type Session struct {
 	Description         string    `json:"description"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+// NewSession returns a new Session with the given fields. ID is typically set by the repository on create.
+func NewSession(roomID, sessionizeSessionID, title, description string, startTime, endTime, createdAt, updatedAt time.Time) *Session {
+	return &Session{
+		RoomID:              roomID,
+		SessionizeSessionID: sessionizeSessionID,
+		Title:               title,
+		StartTime:           startTime,
+		EndTime:             endTime,
+		Description:         description,
+		CreatedAt:           createdAt,
+		UpdatedAt:           updatedAt,
+	}
 }
 
 // SessionRepository defines the interface for session and room storage

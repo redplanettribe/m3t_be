@@ -62,13 +62,8 @@ func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventI
 	// Insert Rooms
 	roomMap := make(map[int]string) // sessionize_id -> domain_id
 	for sID, name := range uniqueRooms {
-		r := &domain.Room{
-			EventID:          eventID,
-			Name:             name,
-			SessionizeRoomID: sID,
-			CreatedAt:        time.Now(),
-			UpdatedAt:        time.Now(),
-		}
+		now := time.Now()
+		r := domain.NewRoom(eventID, name, sID, now, now)
 		if err := s.sessionRepo.CreateRoom(ctx, r); err != nil {
 			return fmt.Errorf("failed to create room %s: %w", name, err)
 		}
@@ -88,16 +83,8 @@ func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventI
 				if session.Description != nil {
 					desc = *session.Description
 				}
-				sess := &domain.Session{
-					RoomID:              domainRoomID,
-					SessionizeSessionID: session.ID,
-					Title:               session.Title,
-					StartTime:           session.StartsAt,
-					EndTime:             session.EndsAt,
-					Description:         desc,
-					CreatedAt:           time.Now(),
-					UpdatedAt:           time.Now(),
-				}
+				now := time.Now()
+				sess := domain.NewSession(domainRoomID, session.ID, session.Title, desc, session.StartsAt, session.EndsAt, now, now)
 
 				if err := s.sessionRepo.CreateSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to create session %s: %w", session.Title, err)

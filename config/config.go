@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"time"
@@ -18,9 +18,10 @@ type Config struct {
 	JWTExpiry   time.Duration
 }
 
-// Load loads configuration from environment variables
-// It attempts to load from .env file if not in production
-func Load() (*Config, error) {
+// Load loads configuration from environment variables.
+// It attempts to load from .env file if not in production.
+// If logger is non-nil, .env load warnings are logged via slog; otherwise no warning is logged.
+func Load(logger *slog.Logger) (*Config, error) {
 	env := os.Getenv("GO_ENV")
 	if env == "" {
 		env = "development"
@@ -31,7 +32,9 @@ func Load() (*Config, error) {
 	// and we rely on system environment variables
 	if env != "production" {
 		if err := godotenv.Load(); err != nil {
-			log.Printf("Warning: .env file not found or couldn't be loaded: %v", err)
+			if logger != nil {
+				logger.Warn(".env file not found or couldn't be loaded", "err", err)
+			}
 		}
 	}
 

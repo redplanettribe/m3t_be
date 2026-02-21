@@ -1,19 +1,25 @@
-package http
+package controllers
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/domain"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// testLogger is a no-op logger for controller tests so we don't assert on log output.
+var testLogger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 // fakeManageScheduleService implements domain.ManageScheduleService for handler tests.
 type fakeManageScheduleService struct {
@@ -107,7 +113,7 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeManageScheduleService{createEventErr: tt.fakeErr}
-			ctrl := NewScheduleController(fake)
+			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
@@ -115,7 +121,7 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 			ctrl.CreateEvent(rr, req)
 
 			require.Equal(t, tt.wantStatus, rr.Code, "status code")
-			var envelope APIResponse
+			var envelope helpers.APIResponse
 			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
 			if tt.wantStatus == http.StatusCreated && tt.decodeEvent {
 				require.Nil(t, envelope.Error, "success response must have error nil")
@@ -177,7 +183,7 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := &fakeManageScheduleService{importSessionizeErr: tt.fakeErr}
-			ctrl := NewScheduleController(fake)
+			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodPost, "http://test"+tt.path, nil)
 			// Set path params for direct handler call (router would set these in production).
 			switch tt.name {
@@ -198,7 +204,7 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 			ctrl.ImportSessionize(rr, req)
 
 			require.Equal(t, tt.wantStatus, rr.Code, "status code")
-			var envelope APIResponse
+			var envelope helpers.APIResponse
 			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
 			if tt.wantStatus == http.StatusOK {
 				require.Nil(t, envelope.Error, "success response must have error nil")

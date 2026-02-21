@@ -38,5 +38,6 @@ Verify against this codebase:
 - [ ] HTTP errors via `http.Error`, 400 for bad input and 500 for service/repo failures
 - [ ] New/changed handlers have swaggo comments and `make swag` was run
 - [ ] Migrations are paired up/down in `migrations/`
+- [ ] Logging follows [.cursor/rules/logging.mdc](.cursor/rules/logging.mdc)
 
 See `.cursor/rules/` for details.

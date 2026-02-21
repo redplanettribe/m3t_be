@@ -14,6 +14,16 @@ type Event struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// NewEvent returns a new Event with the given fields. ID is typically set by the repository on create.
+func NewEvent(name, slug string, createdAt, updatedAt time.Time) *Event {
+	return &Event{
+		Name:      name,
+		Slug:      slug,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}
+}
+
 // EventRepository defines the interface for event storage
 type EventRepository interface {
 	Create(ctx context.Context, event *Event) error
