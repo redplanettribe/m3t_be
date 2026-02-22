@@ -19,9 +19,10 @@ func NewRouter(
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// API Routes
-	mux.HandleFunc("POST /events", scheduleController.CreateEvent)
-	mux.HandleFunc("POST /events/{eventID}/import/sessionize/{sessionizeID}", scheduleController.ImportSessionize)
+	// Event management (protected)
+	mux.HandleFunc("GET /events/me", requireAuth(scheduleController.ListMyEvents))
+	mux.HandleFunc("POST /events", requireAuth(scheduleController.CreateEvent))
+	mux.HandleFunc("POST /events/{eventID}/import/sessionize/{sessionizeID}", requireAuth(scheduleController.ImportSessionize))
 
 	// Auth (handled by user controller)
 	mux.HandleFunc("POST /auth/signup", userController.SignUp)

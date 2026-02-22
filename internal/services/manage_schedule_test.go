@@ -54,6 +54,24 @@ func (f *fakeEventRepo) GetBySlug(ctx context.Context, slug string) (*domain.Eve
 	return nil, errors.New("not found")
 }
 
+func (f *fakeEventRepo) ListByOwnerID(ctx context.Context, ownerID string) ([]*domain.Event, error) {
+	var out []*domain.Event
+	for _, e := range f.byID {
+		if e.OwnerID == ownerID {
+			out = append(out, e)
+		}
+	}
+	// Sort by CreatedAt DESC to match repo
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j].CreatedAt.After(out[i].CreatedAt) {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out, nil
+}
+
 // fakeSessionRepo is an in-memory SessionRepository for tests.
 type fakeSessionRepo struct {
 	rooms    []*domain.Room
@@ -174,7 +192,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 				er := newFakeEventRepo()
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			event:   &domain.Event{Name: "Conf", Slug: "conf-2025"},
+			event:   &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1"},
 			wantErr: false,
 			assert: func(t *testing.T, eventRepo *fakeEventRepo, event *domain.Event) {
 				require.NotEmpty(t, event.ID)
@@ -182,9 +200,11 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 				assert.False(t, event.UpdatedAt.IsZero())
 				assert.Equal(t, "Conf", event.Name)
 				assert.Equal(t, "conf-2025", event.Slug)
+				assert.Equal(t, "user-1", event.OwnerID)
 				got, ok := eventRepo.byID[event.ID]
 				require.True(t, ok)
 				assert.Equal(t, event.ID, got.ID)
+				assert.Equal(t, "user-1", got.OwnerID)
 			},
 		},
 		{
@@ -193,6 +213,15 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 				er := newFakeEventRepo()
 				er.err = errors.New("db error")
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			event:   &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1"},
+			wantErr: true,
+			assert:  func(t *testing.T, _ *fakeEventRepo, _ *domain.Event) {},
+		},
+		{
+			name: "missing owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			event:   &domain.Event{Name: "Conf", Slug: "conf-2025"},
 			wantErr: true,
@@ -204,7 +233,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
 			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
-			ev := &domain.Event{Name: tt.event.Name, Slug: tt.event.Slug}
+			ev := &domain.Event{Name: tt.event.Name, Slug: tt.event.Slug, OwnerID: tt.event.OwnerID}
 			err := svc.CreateEvent(ctx, ev)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -306,6 +335,60 @@ func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
 			sr, ok := sessionRepo.(*fakeSessionRepo)
 			require.True(t, ok)
 			tt.assert(t, sr)
+		})
+	}
+}
+
+func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name    string
+		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		ownerID string
+		wantLen int
+		assert  func(t *testing.T, events []*domain.Event)
+	}{
+		{
+			name: "returns only owner events",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				// Create two events for user-1, one for user-2
+				_ = er.Create(ctx, &domain.Event{Name: "E1", Slug: "e1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "E2", Slug: "e2", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Other", Slug: "other", OwnerID: "user-2", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			ownerID: "user-1",
+			wantLen: 2,
+			assert: func(t *testing.T, events []*domain.Event) {
+				for _, e := range events {
+					assert.Equal(t, "user-1", e.OwnerID)
+				}
+			},
+		},
+		{
+			name: "empty for unknown owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "E1", Slug: "e1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			ownerID: "user-none",
+			wantLen: 0,
+			assert:  func(t *testing.T, events []*domain.Event) {},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
+			events, err := svc.ListEventsByOwner(ctx, tt.ownerID)
+			require.NoError(t, err)
+			require.Len(t, events, tt.wantLen)
+			tt.assert(t, events)
 		})
 	}
 }

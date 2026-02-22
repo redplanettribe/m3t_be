@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+
 	"multitrackticketing/internal/domain"
 )
 
@@ -18,21 +19,21 @@ func NewEventRepository(db *sql.DB) domain.EventRepository {
 
 func (r *eventRepository) Create(ctx context.Context, e *domain.Event) error {
 	query := `
-		INSERT INTO events (name, slug, created_at, updated_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO events (name, slug, owner_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
-	return r.DB.QueryRowContext(ctx, query, e.Name, e.Slug, e.CreatedAt, e.UpdatedAt).Scan(&e.ID)
+	return r.DB.QueryRowContext(ctx, query, e.Name, e.Slug, e.OwnerID, e.CreatedAt, e.UpdatedAt).Scan(&e.ID)
 }
 
 func (r *eventRepository) GetByID(ctx context.Context, id string) (*domain.Event, error) {
 	query := `
-		SELECT id, name, slug, created_at, updated_at
+		SELECT id, name, slug, owner_id, created_at, updated_at
 		FROM events
 		WHERE id = $1
 	`
 	e := &domain.Event{}
-	err := r.DB.QueryRowContext(ctx, query, id).Scan(&e.ID, &e.Name, &e.Slug, &e.CreatedAt, &e.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(&e.ID, &e.Name, &e.Slug, &e.OwnerID, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -41,14 +42,37 @@ func (r *eventRepository) GetByID(ctx context.Context, id string) (*domain.Event
 
 func (r *eventRepository) GetBySlug(ctx context.Context, slug string) (*domain.Event, error) {
 	query := `
-		SELECT id, name, slug, created_at, updated_at
+		SELECT id, name, slug, owner_id, created_at, updated_at
 		FROM events
 		WHERE slug = $1
 	`
 	e := &domain.Event{}
-	err := r.DB.QueryRowContext(ctx, query, slug).Scan(&e.ID, &e.Name, &e.Slug, &e.CreatedAt, &e.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, slug).Scan(&e.ID, &e.Name, &e.Slug, &e.OwnerID, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return e, nil
+}
+
+func (r *eventRepository) ListByOwnerID(ctx context.Context, ownerID string) ([]*domain.Event, error) {
+	query := `
+		SELECT id, name, slug, owner_id, created_at, updated_at
+		FROM events
+		WHERE owner_id = $1
+		ORDER BY created_at DESC
+	`
+	rows, err := r.DB.QueryContext(ctx, query, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	events := make([]*domain.Event, 0)
+	for rows.Next() {
+		e := &domain.Event{}
+		if err := rows.Scan(&e.ID, &e.Name, &e.Slug, &e.OwnerID, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
 }

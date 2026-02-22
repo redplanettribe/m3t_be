@@ -66,4 +66,5 @@ type SessionRepository interface {
 type ManageScheduleService interface {
 	CreateEvent(ctx context.Context, event *Event) error
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
+	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
 }

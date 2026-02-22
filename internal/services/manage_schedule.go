@@ -28,6 +28,10 @@ func (s *manageScheduleService) CreateEvent(ctx context.Context, event *domain.E
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
+	if event.OwnerID == "" {
+		return fmt.Errorf("event owner is required")
+	}
+
 	event.CreatedAt = time.Now()
 	event.UpdatedAt = time.Now()
 
@@ -94,4 +98,10 @@ func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventI
 	}
 
 	return nil
+}
+
+func (s *manageScheduleService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+	return s.eventRepo.ListByOwnerID(ctx, ownerID)
 }
