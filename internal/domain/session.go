@@ -6,6 +6,7 @@ import (
 )
 
 // Room represents a physical room or track at the event
+// swagger:model Room
 type Room struct {
 	ID               string    `json:"id"`
 	EventID          string    `json:"event_id"`
@@ -27,6 +28,7 @@ func NewRoom(eventID, name string, sessionizeRoomID int, createdAt, updatedAt ti
 }
 
 // Session represents a conference session or talk
+// swagger:model Session
 type Session struct {
 	ID                  string    `json:"id"`
 	RoomID              string    `json:"room_id"`

@@ -13,6 +13,7 @@ var (
 )
 
 // User represents a registered user
+// swagger:model User
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`

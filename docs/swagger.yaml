@@ -7,12 +7,83 @@ definitions:
       slug:
         type: string
     type: object
+  controllers.CreateEventSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Event'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.GetEventByIDResponse:
+    properties:
+      event:
+        $ref: '#/definitions/domain.Event'
+      rooms:
+        items:
+          $ref: '#/definitions/domain.Room'
+        type: array
+      sessions:
+        items:
+          $ref: '#/definitions/domain.Session'
+        type: array
+    type: object
+  controllers.GetEventByIDSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.GetEventByIDResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.GetMeSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.User'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.ImportSessionizeResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  controllers.ImportSessionizeSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.ImportSessionizeResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.ListMyEventsSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/domain.Event'
+        type: array
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.LoginRequest:
     properties:
       email:
         type: string
       password:
         type: string
+    type: object
+  controllers.LoginResponse:
+    properties:
+      token:
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/domain.User'
+    type: object
+  controllers.LoginSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.LoginResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
     type: object
   controllers.SignUpRequest:
     properties:
@@ -26,11 +97,89 @@ definitions:
         description: 'optional: "admin" or "attendee" (defaults to "attendee")'
         type: string
     type: object
+  controllers.SignUpSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.User'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.UpdateUserRequest:
     properties:
       email:
         type: string
       name:
+        type: string
+    type: object
+  controllers.UpdateUserSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.User'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  domain.Event:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      owner_id:
+        type: string
+      slug:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.Room:
+    properties:
+      created_at:
+        type: string
+      event_id:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      sessionize_room_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  domain.Session:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      end_time:
+        type: string
+      id:
+        type: string
+      room_id:
+        type: string
+      sessionize_session_id:
+        type: string
+      start_time:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
         type: string
     type: object
   helpers.APIError:
@@ -72,7 +221,7 @@ paths:
         "200":
           description: data contains token, token_type, and user
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.LoginSuccessResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
@@ -107,7 +256,7 @@ paths:
         "201":
           description: data contains the created user
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.SignUpSuccessResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
@@ -139,7 +288,7 @@ paths:
         "201":
           description: data contains the created event
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.CreateEventSuccessResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
@@ -173,7 +322,7 @@ paths:
         "200":
           description: data contains event, rooms, and sessions
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.GetEventByIDSuccessResponse'
         "401":
           description: 'error.code: unauthorized'
           schema:
@@ -209,7 +358,7 @@ paths:
         "200":
           description: data contains status message
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.ImportSessionizeSuccessResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
@@ -237,7 +386,7 @@ paths:
         "200":
           description: data is an array of events
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.ListMyEventsSuccessResponse'
         "401":
           description: 'error.code: unauthorized'
           schema:
@@ -261,7 +410,7 @@ paths:
         "200":
           description: data contains the user
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.GetMeSuccessResponse'
         "401":
           description: 'error.code: unauthorized'
           schema:
@@ -297,7 +446,7 @@ paths:
         "200":
           description: data contains the updated user
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.UpdateUserSuccessResponse'
         "400":
           description: 'error.code: bad_request'
           schema:

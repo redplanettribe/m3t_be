@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	h "multitrackticketing/internal/delivery/http/helpers"
+	"multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/delivery/http/middleware"
 	"multitrackticketing/internal/domain"
 )
@@ -91,6 +91,30 @@ func (u UpdateUserRequest) Validate() []string {
 	return errs
 }
 
+// SignUpSuccessResponse is the success response envelope for POST /auth/signup (201).
+type SignUpSuccessResponse struct {
+	Data  *domain.User `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// LoginSuccessResponse is the success response envelope for POST /auth/login (200).
+type LoginSuccessResponse struct {
+	Data  LoginResponse `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// GetMeSuccessResponse is the success response envelope for GET /users/me (200).
+type GetMeSuccessResponse struct {
+	Data  *domain.User `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// UpdateUserSuccessResponse is the success response envelope for PATCH /users/me (200).
+type UpdateUserSuccessResponse struct {
+	Data  *domain.User `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
 // UserController handles user profile and auth endpoints.
 type UserController struct {
 	Logger  *slog.Logger
@@ -112,13 +136,13 @@ func NewUserController(logger *slog.Logger, svc domain.UserService) *UserControl
 // @Accept json
 // @Produce json
 // @Param body body SignUpRequest true "Sign-up data"
-// @Success 201 {object} helpers.APIResponse "data contains the created user"
+// @Success 201 {object} controllers.SignUpSuccessResponse "data contains the created user"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /auth/signup [post]
 func (c *UserController) SignUp(w http.ResponseWriter, r *http.Request) {
 	var req SignUpRequest
-	if !h.DecodeAndValidate(w, r, &req) {
+	if !helpers.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	email := strings.TrimSpace(strings.ToLower(req.Email))
@@ -129,19 +153,19 @@ func (c *UserController) SignUp(w http.ResponseWriter, r *http.Request) {
 	user, err := c.Service.SignUp(r.Context(), email, req.Password, req.Name, role)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "already exists") {
-			h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, "email already registered")
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "email already registered")
 			return
 		}
 		if strings.Contains(err.Error(), "invalid email") || strings.Contains(err.Error(), "password must be") {
-			h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, err.Error())
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	h.WriteJSONSuccess(w, http.StatusCreated, user)
+	helpers.WriteJSONSuccess(w, http.StatusCreated, user)
 }
 
 // Login godoc
@@ -151,28 +175,28 @@ func (c *UserController) SignUp(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Param body body LoginRequest true "Login credentials"
-// @Success 200 {object} helpers.APIResponse "data contains token, token_type, and user"
+// @Success 200 {object} controllers.LoginSuccessResponse "data contains token, token_type, and user"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /auth/login [post]
 func (c *UserController) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if !h.DecodeAndValidate(w, r, &req) {
+	if !helpers.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	token, user, err := c.Service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid credentials") {
-			h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "invalid credentials")
+			helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "invalid credentials")
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	h.WriteJSONSuccess(w, http.StatusOK, LoginResponse{Token: token, TokenType: "Bearer", User: user})
+	helpers.WriteJSONSuccess(w, http.StatusOK, LoginResponse{Token: token, TokenType: "Bearer", User: user})
 }
 
 // GetMe godoc
@@ -181,7 +205,7 @@ func (c *UserController) Login(w http.ResponseWriter, r *http.Request) {
 // @Tags users
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} helpers.APIResponse "data contains the user"
+// @Success 200 {object} controllers.GetMeSuccessResponse "data contains the user"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 404 {object} helpers.APIResponse "error.code: not_found"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
@@ -189,20 +213,20 @@ func (c *UserController) Login(w http.ResponseWriter, r *http.Request) {
 func (c *UserController) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
 	user, err := c.Service.GetByID(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
-			h.WriteJSONError(w, http.StatusNotFound, h.ErrCodeNotFound, "user not found")
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "user not found")
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
-	h.WriteJSONSuccess(w, http.StatusOK, user)
+	helpers.WriteJSONSuccess(w, http.StatusOK, user)
 }
 
 // UpdateMe godoc
@@ -213,7 +237,7 @@ func (c *UserController) GetMe(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Security BearerAuth
 // @Param body body UpdateUserRequest true "Fields to update (name and/or email, both optional)"
-// @Success 200 {object} helpers.APIResponse "data contains the updated user"
+// @Success 200 {object} controllers.UpdateUserSuccessResponse "data contains the updated user"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 404 {object} helpers.APIResponse "error.code: not_found"
@@ -223,21 +247,21 @@ func (c *UserController) GetMe(w http.ResponseWriter, r *http.Request) {
 func (c *UserController) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
 	var req UpdateUserRequest
-	if !h.DecodeAndValidate(w, r, &req) {
+	if !helpers.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	user, err := c.Service.GetByID(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
-			h.WriteJSONError(w, http.StatusNotFound, h.ErrCodeNotFound, "user not found")
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "user not found")
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
 	if req.Name != nil {
@@ -248,16 +272,16 @@ func (c *UserController) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := c.Service.Update(r.Context(), user); err != nil {
 		if errors.Is(err, domain.ErrDuplicateEmail) {
-			h.WriteJSONError(w, http.StatusConflict, h.ErrCodeConflict, "email already in use")
+			helpers.WriteJSONError(w, http.StatusConflict, helpers.ErrCodeConflict, "email already in use")
 			return
 		}
 		if errors.Is(err, domain.ErrUserNotFound) {
-			h.WriteJSONError(w, http.StatusNotFound, h.ErrCodeNotFound, "user not found")
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "user not found")
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
-	h.WriteJSONSuccess(w, http.StatusOK, user)
+	helpers.WriteJSONSuccess(w, http.StatusOK, user)
 }

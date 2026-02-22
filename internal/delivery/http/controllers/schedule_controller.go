@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	h "multitrackticketing/internal/delivery/http/helpers"
+	"multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/delivery/http/middleware"
 	"multitrackticketing/internal/domain"
 )
@@ -29,6 +29,12 @@ func (c CreateEventRequest) Validate() []string {
 	return errs
 }
 
+// CreateEventSuccessResponse is the success response envelope for POST /events (201).
+type CreateEventSuccessResponse struct {
+	Data  *domain.Event  `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
 type ScheduleController struct {
 	Logger  *slog.Logger
 	Service domain.ManageScheduleService
@@ -49,36 +55,42 @@ func NewScheduleController(logger *slog.Logger, svc domain.ManageScheduleService
 // @Produce json
 // @Security BearerAuth
 // @Param event body CreateEventRequest true "Event data (name and slug only)"
-// @Success 201 {object} helpers.APIResponse "data contains the created event"
+// @Success 201 {object} controllers.CreateEventSuccessResponse "data contains the created event"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /events [post]
 func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var req CreateEventRequest
-	if !h.DecodeAndValidate(w, r, &req) {
+	if !helpers.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
 	now := time.Now()
 	event := domain.NewEvent(req.Name, req.Slug, userID, now, now)
 	if err := c.Service.CreateEvent(r.Context(), event); err != nil {
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
-	h.WriteJSONSuccess(w, http.StatusCreated, event)
+	helpers.WriteJSONSuccess(w, http.StatusCreated, event)
 }
 
 // GetEventByIDResponse is the response body for GET /events/{eventID}. Contains the event, its rooms, and sessions.
 type GetEventByIDResponse struct {
-	Event    *domain.Event    `json:"event"`
-	Rooms    []*domain.Room   `json:"rooms"`
+	Event    *domain.Event     `json:"event"`
+	Rooms    []*domain.Room    `json:"rooms"`
 	Sessions []*domain.Session `json:"sessions"`
+}
+
+// GetEventByIDSuccessResponse is the success response envelope for GET /events/{eventID} (200).
+type GetEventByIDSuccessResponse struct {
+	Data  GetEventByIDResponse `json:"data"`
+	Error *helpers.APIError   `json:"error"`
 }
 
 // GetEventByID godoc
@@ -88,7 +100,7 @@ type GetEventByIDResponse struct {
 // @Produce json
 // @Security BearerAuth
 // @Param eventID path string true "Event ID (UUID)"
-// @Success 200 {object} helpers.APIResponse "data contains event, rooms, and sessions"
+// @Success 200 {object} controllers.GetEventByIDSuccessResponse "data contains event, rooms, and sessions"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 404 {object} helpers.APIResponse "error.code: not_found"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
@@ -96,25 +108,36 @@ type GetEventByIDResponse struct {
 func (c *ScheduleController) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")
 	if eventID == "" {
-		h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, "missing eventID")
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
 		return
 	}
 	_, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
 	event, rooms, sessions, err := c.Service.GetEventByID(r.Context(), eventID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			h.WriteJSONError(w, http.StatusNotFound, h.ErrCodeNotFound, "event not found")
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
-	h.WriteJSONSuccess(w, http.StatusOK, GetEventByIDResponse{Event: event, Rooms: rooms, Sessions: sessions})
+	helpers.WriteJSONSuccess(w, http.StatusOK, GetEventByIDResponse{Event: event, Rooms: rooms, Sessions: sessions})
+}
+
+// ImportSessionizeResponse is the data payload for POST /events/{eventID}/import/sessionize/{sessionizeID} (200).
+type ImportSessionizeResponse struct {
+	Status string `json:"status"`
+}
+
+// ImportSessionizeSuccessResponse is the success response envelope for POST /events/{eventID}/import/sessionize/{sessionizeID} (200).
+type ImportSessionizeSuccessResponse struct {
+	Data  ImportSessionizeResponse `json:"data"`
+	Error *helpers.APIError        `json:"error"`
 }
 
 // ImportSessionize godoc
@@ -124,7 +147,7 @@ func (c *ScheduleController) GetEventByID(w http.ResponseWriter, r *http.Request
 // @Security BearerAuth
 // @Param eventID path string true "Event ID"
 // @Param sessionizeID path string true "Sessionize ID"
-// @Success 200 {object} helpers.APIResponse "data contains status message"
+// @Success 200 {object} controllers.ImportSessionizeSuccessResponse "data contains status message"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
@@ -134,17 +157,23 @@ func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Req
 	sessionizeID := r.PathValue("sessionizeID")
 
 	if eventID == "" || sessionizeID == "" {
-		h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, "missing eventID or sessionizeID")
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionizeID")
 		return
 	}
 
 	if err := c.Service.ImportSessionizeData(r.Context(), eventID, sessionizeID); err != nil {
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
 
-	h.WriteJSONSuccess(w, http.StatusOK, map[string]string{"status": "imported successfully"})
+	helpers.WriteJSONSuccess(w, http.StatusOK, ImportSessionizeResponse{Status: "imported successfully"})
+}
+
+// ListMyEventsSuccessResponse is the success response envelope for GET /events/me (200).
+type ListMyEventsSuccessResponse struct {
+	Data  []*domain.Event `json:"data"`
+	Error *helpers.APIError `json:"error"`
 }
 
 // ListMyEvents godoc
@@ -153,24 +182,24 @@ func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Req
 // @Tags events
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} helpers.APIResponse "data is an array of events"
+// @Success 200 {object} controllers.ListMyEventsSuccessResponse "data is an array of events"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /events/me [get]
 func (c *ScheduleController) ListMyEvents(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
 	events, err := c.Service.ListEventsByOwner(r.Context(), userID)
 	if err != nil {
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
-		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
 	if events == nil {
 		events = []*domain.Event{}
 	}
-	h.WriteJSONSuccess(w, http.StatusOK, events)
+	helpers.WriteJSONSuccess(w, http.StatusOK, events)
 }

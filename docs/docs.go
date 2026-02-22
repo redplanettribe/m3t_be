@@ -43,7 +43,7 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains token, token_type, and user",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.LoginSuccessResponse"
                         }
                     },
                     "400": {
@@ -95,7 +95,7 @@ const docTemplate = `{
                     "201": {
                         "description": "data contains the created user",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.SignUpSuccessResponse"
                         }
                     },
                     "400": {
@@ -146,7 +146,7 @@ const docTemplate = `{
                     "201": {
                         "description": "data contains the created event",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.CreateEventSuccessResponse"
                         }
                     },
                     "400": {
@@ -189,7 +189,7 @@ const docTemplate = `{
                     "200": {
                         "description": "data is an array of events",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.ListMyEventsSuccessResponse"
                         }
                     },
                     "401": {
@@ -235,7 +235,7 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains event, rooms, and sessions",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.GetEventByIDSuccessResponse"
                         }
                     },
                     "401": {
@@ -291,7 +291,7 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains status message",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.ImportSessionizeSuccessResponse"
                         }
                     },
                     "400": {
@@ -334,7 +334,7 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains the user",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.GetMeSuccessResponse"
                         }
                     },
                     "401": {
@@ -389,7 +389,7 @@ const docTemplate = `{
                     "200": {
                         "description": "data contains the updated user",
                         "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
+                            "$ref": "#/definitions/controllers.UpdateUserSuccessResponse"
                         }
                     },
                     "400": {
@@ -438,6 +438,92 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.CreateEventSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.Event"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "controllers.GetEventByIDResponse": {
+            "type": "object",
+            "properties": {
+                "event": {
+                    "$ref": "#/definitions/domain.Event"
+                },
+                "rooms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Room"
+                    }
+                },
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Session"
+                    }
+                }
+            }
+        },
+        "controllers.GetEventByIDSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/controllers.GetEventByIDResponse"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "controllers.GetMeSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.User"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "controllers.ImportSessionizeResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.ImportSessionizeSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/controllers.ImportSessionizeResponse"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "controllers.ListMyEventsSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Event"
+                    }
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
         "controllers.LoginRequest": {
             "type": "object",
             "properties": {
@@ -446,6 +532,31 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "controllers.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/domain.User"
+                }
+            }
+        },
+        "controllers.LoginSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/controllers.LoginResponse"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
                 }
             }
         },
@@ -467,6 +578,17 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.SignUpSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.User"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
         "controllers.UpdateUserRequest": {
             "type": "object",
             "properties": {
@@ -474,6 +596,115 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.UpdateUserSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.User"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "domain.Event": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.Room": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sessionize_room_id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.Session": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "room_id": {
+                    "type": "string"
+                },
+                "sessionize_session_id": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }

@@ -10,6 +10,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 // Event represents a conference event
+// swagger:model Event
 type Event struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
