@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -16,6 +17,7 @@ type Config struct {
 	Port        string
 	JWTSecret   string
 	JWTExpiry   time.Duration
+	CORSOrigins []string
 }
 
 // Load loads configuration from environment variables.
@@ -45,12 +47,18 @@ func Load(logger *slog.Logger) (*Config, error) {
 		}
 	}
 
+	corsOrigins := parseCORSOrigins(os.Getenv("CORS_ORIGINS"))
+	if len(corsOrigins) == 0 {
+		corsOrigins = []string{"https://m3tadminfe-7h545.sevalla.app"}
+	}
+
 	cfg := &Config{
 		Environment: env,
 		DBUrl:       os.Getenv("DATABASE_URL"),
 		Port:        os.Getenv("PORT"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		JWTExpiry:   jwtExpiry,
+		CORSOrigins: corsOrigins,
 	}
 
 	// Set defaults
@@ -67,6 +75,21 @@ func Load(logger *slog.Logger) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// parseCORSOrigins splits a comma-separated list of origins, trims spaces, and omits empty entries.
+func parseCORSOrigins(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, o := range strings.Split(s, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // setDefaultSSLMode adds sslmode=defaultMode to the Postgres URL if no sslmode is set.

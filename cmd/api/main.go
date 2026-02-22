@@ -76,7 +76,7 @@ func main() {
 
 	// 4. Router
 	mux := httpDelivery.NewRouter(scheduleController, userController, requireAuth)
-	handler := middleware.LoggingMiddleware(logger, mux)
+	handler := middleware.CORS(cfg.CORSOrigins, middleware.LoggingMiddleware(logger, mux))
 
 	// 5. Server
 	port := ":" + cfg.Port
