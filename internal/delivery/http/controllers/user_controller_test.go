@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -25,6 +26,25 @@ type fakeUserService struct {
 	getByIDErr  error
 	updateErr   error
 	lastUpdate  *domain.User
+	signUpUser  *domain.User
+	signUpErr   error
+	loginToken  string
+	loginUser   *domain.User
+	loginErr    error
+}
+
+func (f *fakeUserService) SignUp(ctx context.Context, email, password, name, role string) (*domain.User, error) {
+	if f.signUpErr != nil {
+		return nil, f.signUpErr
+	}
+	return f.signUpUser, nil
+}
+
+func (f *fakeUserService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
+	if f.loginErr != nil {
+		return "", nil, f.loginErr
+	}
+	return f.loginToken, f.loginUser, nil
 }
 
 func (f *fakeUserService) GetByID(ctx context.Context, id string) (*domain.User, error) {
@@ -224,6 +244,161 @@ func TestUserController_UpdateMe(t *testing.T) {
 			}
 			if tt.wantBodySubstr != "" {
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestUserController_SignUp(t *testing.T) {
+	userLogger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	now := time.Now()
+
+	tests := []struct {
+		name         string
+		body         string
+		fakeUser     *domain.User
+		fakeErr      error
+		wantStatus   int
+		wantBodyCode string
+		checkUser    func(t *testing.T, u *domain.User)
+	}{
+		{
+			name:       "success",
+			body:       `{"email":"alice@example.com","password":"password8","name":"Alice","role":"attendee"}`,
+			fakeUser:   &domain.User{ID: "id-1", Email: "alice@example.com", Name: "Alice", CreatedAt: now, UpdatedAt: now},
+			wantStatus: http.StatusCreated,
+			checkUser: func(t *testing.T, u *domain.User) {
+				assert.Equal(t, "id-1", u.ID)
+				assert.Equal(t, "alice@example.com", u.Email)
+				assert.Equal(t, "Alice", u.Name)
+			},
+		},
+		{
+			name:         "invalid json",
+			body:         `{invalid`,
+			wantStatus:   http.StatusBadRequest,
+			wantBodyCode: helpers.ErrCodeBadRequest,
+		},
+		{
+			name:         "missing email",
+			body:         `{"password":"password8","name":"Alice"}`,
+			wantStatus:   http.StatusBadRequest,
+			wantBodyCode: helpers.ErrCodeBadRequest,
+		},
+		{
+			name:       "duplicate email from service",
+			body:       `{"email":"taken@example.com","password":"password8","name":"X"}`,
+			fakeErr:    errors.New("duplicate key"),
+			wantStatus: http.StatusBadRequest,
+			wantBodyCode: helpers.ErrCodeBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeUserService{signUpUser: tt.fakeUser, signUpErr: tt.fakeErr}
+			ctrl := NewUserController(userLogger, fake)
+			req := httptest.NewRequest(http.MethodPost, "http://test/auth/signup", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			ctrl.SignUp(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusCreated && tt.checkUser != nil {
+				require.Nil(t, envelope.Error)
+				dataBytes, err := json.Marshal(envelope.Data)
+				require.NoError(t, err)
+				var u domain.User
+				require.NoError(t, json.Unmarshal(dataBytes, &u))
+				tt.checkUser(t, &u)
+			}
+			if tt.wantBodyCode != "" && tt.wantStatus != http.StatusCreated {
+				require.NotNil(t, envelope.Error)
+				assert.Equal(t, tt.wantBodyCode, envelope.Error.Code)
+			}
+		})
+	}
+}
+
+func TestUserController_Login(t *testing.T) {
+	userLogger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	now := time.Now()
+
+	tests := []struct {
+		name          string
+		body          string
+		fakeToken     string
+		fakeUser      *domain.User
+		fakeErr       error
+		wantStatus    int
+		wantBodyCode  string
+		checkToken    string
+		checkUser     func(t *testing.T, u *domain.User)
+	}{
+		{
+			name:       "success",
+			body:       `{"email":"alice@example.com","password":"secret"}`,
+			fakeToken:  "bearer-token-xyz",
+			fakeUser:   &domain.User{ID: "id-1", Email: "alice@example.com", Name: "Alice", CreatedAt: now, UpdatedAt: now},
+			wantStatus: http.StatusOK,
+			checkToken: "bearer-token-xyz",
+			checkUser: func(t *testing.T, u *domain.User) {
+				assert.Equal(t, "id-1", u.ID)
+				assert.Equal(t, "alice@example.com", u.Email)
+				assert.Equal(t, "Alice", u.Name)
+			},
+		},
+		{
+			name:         "invalid credentials",
+			body:         `{"email":"alice@example.com","password":"wrong"}`,
+			fakeErr:      errors.New("invalid credentials"),
+			wantStatus:   http.StatusUnauthorized,
+			wantBodyCode: helpers.ErrCodeUnauthorized,
+		},
+		{
+			name:         "missing password",
+			body:         `{"email":"alice@example.com"}`,
+			wantStatus:   http.StatusBadRequest,
+			wantBodyCode: helpers.ErrCodeBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeUserService{loginToken: tt.fakeToken, loginUser: tt.fakeUser, loginErr: tt.fakeErr}
+			ctrl := NewUserController(userLogger, fake)
+			req := httptest.NewRequest(http.MethodPost, "http://test/auth/login", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			ctrl.Login(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK {
+				require.Nil(t, envelope.Error)
+				dataBytes, err := json.Marshal(envelope.Data)
+				require.NoError(t, err)
+				var resp struct {
+					Token     string       `json:"token"`
+					TokenType string       `json:"token_type"`
+					User      *domain.User `json:"user"`
+				}
+				require.NoError(t, json.Unmarshal(dataBytes, &resp))
+				assert.Equal(t, tt.checkToken, resp.Token)
+				assert.Equal(t, "Bearer", resp.TokenType)
+				if tt.checkUser != nil && resp.User != nil {
+					tt.checkUser(t, resp.User)
+				}
+				return
+			}
+			if tt.wantBodyCode != "" {
+				require.NotNil(t, envelope.Error)
+				assert.Equal(t, tt.wantBodyCode, envelope.Error.Code)
 			}
 		})
 	}

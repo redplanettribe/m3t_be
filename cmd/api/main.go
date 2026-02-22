@@ -70,15 +70,12 @@ func main() {
 	}
 	passwordHasher := auth.NewBcryptHasher(10)
 	jwtAuth := auth.NewJWTIssuer(jwtSecret, cfg.JWTExpiry)
-	authService := services.NewAuthService(userRepo, roleRepo, passwordHasher, jwtAuth, cfg.JWTExpiry)
-	authController := controllers.NewAuthController(logger, authService)
-
-	userService := services.NewUserService(userRepo)
+	userService := services.NewUserService(userRepo, roleRepo, passwordHasher, jwtAuth, cfg.JWTExpiry)
 	userController := controllers.NewUserController(logger, userService)
 	requireAuth := middleware.RequireAuth(jwtAuth, logger)
 
 	// 4. Router
-	mux := httpDelivery.NewRouter(scheduleController, authController, userController, requireAuth)
+	mux := httpDelivery.NewRouter(scheduleController, userController, requireAuth)
 	handler := middleware.LoggingMiddleware(logger, mux)
 
 	// 5. Server

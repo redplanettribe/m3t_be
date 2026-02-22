@@ -73,8 +73,10 @@ type UserRepository interface {
 	AssignRole(ctx context.Context, userID, roleID string) error
 }
 
-// UserService defines the business logic for user profile operations.
+// UserService defines the business logic for user profile and authentication.
 type UserService interface {
+	SignUp(ctx context.Context, email, password, name, role string) (*User, error)
+	Login(ctx context.Context, email, password string) (token string, user *User, err error)
 	GetByID(ctx context.Context, id string) (*User, error)
 	Update(ctx context.Context, user *User) error
 }
@@ -83,10 +85,4 @@ type UserService interface {
 type RoleRepository interface {
 	GetByCode(ctx context.Context, code string) (*Role, error)
 	ListByUserID(ctx context.Context, userID string) ([]*Role, error)
-}
-
-// AuthService defines the business logic for authentication
-type AuthService interface {
-	SignUp(ctx context.Context, email, password, name, role string) (*User, error)
-	Login(ctx context.Context, email, password string) (token string, err error)
 }

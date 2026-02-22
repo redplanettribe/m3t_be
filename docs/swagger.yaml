@@ -64,8 +64,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate with email and password. Returns a JWT containing
-        user id, email, and roles.
+      description: Authenticate with email and password. Returns a JWT and the user.
+        JWT contains user id, email, and roles.
       parameters:
       - description: Login credentials
         in: body
@@ -77,7 +77,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: data contains token and token_type
+          description: data contains token, token_type, and user
           schema:
             $ref: '#/definitions/helpers.APIResponse'
         "400":

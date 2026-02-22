@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/auth/login": {
             "post": {
-                "description": "Authenticate with email and password. Returns a JWT containing user id, email, and roles.",
+                "description": "Authenticate with email and password. Returns a JWT and the user. JWT contains user id, email, and roles.",
                 "consumes": [
                     "application/json"
                 ],
@@ -41,7 +41,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "data contains token and token_type",
+                        "description": "data contains token, token_type, and user",
                         "schema": {
                             "$ref": "#/definitions/helpers.APIResponse"
                         }

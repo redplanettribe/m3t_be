@@ -14,7 +14,6 @@ type AuthWrap func(http.HandlerFunc) http.HandlerFunc
 // NewRouter initializes the HTTP router with all application routes.
 func NewRouter(
 	scheduleController *controllers.ScheduleController,
-	authController *controllers.AuthController,
 	userController *controllers.UserController,
 	requireAuth AuthWrap,
 ) *http.ServeMux {
@@ -24,9 +23,9 @@ func NewRouter(
 	mux.HandleFunc("POST /events", scheduleController.CreateEvent)
 	mux.HandleFunc("POST /events/{eventID}/import/sessionize/{sessionizeID}", scheduleController.ImportSessionize)
 
-	// Auth
-	mux.HandleFunc("POST /auth/signup", authController.SignUp)
-	mux.HandleFunc("POST /auth/login", authController.Login)
+	// Auth (handled by user controller)
+	mux.HandleFunc("POST /auth/signup", userController.SignUp)
+	mux.HandleFunc("POST /auth/login", userController.Login)
 
 	// Users (protected)
 	mux.HandleFunc("GET /users/me", requireAuth(userController.GetMe))
