@@ -1,0 +1,67 @@
+// Database schema for Multi-Track Ticketing Backend (PostgreSQL).
+// Keep in sync with migrations/*.up.sql. Update after any migration change (see .cursor/skills/update-db-schema-docs).
+
+Table events {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(255) [not null]
+  slug varchar(255) [not null, unique]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table rooms {
+  id uuid [pk, default: `gen_random_uuid()`]
+  event_id uuid [not null, ref: > events.id]
+  name varchar(255) [not null]
+  sessionize_room_id int
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (event_id, sessionize_room_id) [unique]
+    event_id
+  }
+}
+
+Table sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  room_id uuid [not null, ref: > rooms.id]
+  sessionize_session_id varchar(50)
+  title varchar(255) [not null]
+  start_time timestamptz [not null]
+  end_time timestamptz [not null]
+  description text
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (room_id, sessionize_session_id) [unique]
+    room_id
+  }
+}
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(255) [not null, unique]
+  password_hash text [not null]
+  salt text [not null]
+  name varchar(255)
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table roles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(64) [not null, unique]
+}
+
+Table user_roles {
+  user_id uuid [not null, ref: > users.id]
+  role_id uuid [not null, ref: > roles.id]
+
+  indexes {
+    (user_id, role_id) [pk]
+    user_id
+    role_id
+  }
+}

@@ -10,5 +10,6 @@ alwaysApply: false
 - Create **paired files**: `NNNNNN_short_description.up.sql` and `NNNNNN_short_description.down.sql` (e.g. `000002_add_rooms_table.up.sql`).
 - Use **raw SQL** only. Sequence number must be next available in `migrations/`.
 - After adding migrations, run `make migrate-up` to apply.
+- After adding or changing migrations, update `docs/database/schema.dbml` so the database description stays in sync (use the **update-db-schema-docs** skill).
 
 Reference: @migrations/000001_create_sessions_table.up.sql @migrations/000001_create_sessions_table.down.sql

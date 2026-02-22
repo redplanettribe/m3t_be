@@ -24,3 +24,5 @@ Follow project rules in `.cursor/rules/` (migrations).
 3. **Use raw SQL only**; no ORM or application code.
 
 4. **Apply**: Run `make migrate-up` from the project root to run the new migration.
+
+5. **Update DB schema docs**: Follow the **update-db-schema-docs** skill to refresh `docs/database/schema.dbml` so the visualization stays in sync with migrations.
