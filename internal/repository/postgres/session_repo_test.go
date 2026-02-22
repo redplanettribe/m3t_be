@@ -203,3 +203,142 @@ func TestSessionRepository_DeleteScheduleByEventID(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionRepository_ListRoomsByEventID(t *testing.T) {
+	ctx := context.Background()
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name    string
+		eventID string
+		mock    func(mock sqlmock.Sqlmock)
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "success two rooms",
+			eventID: "ev-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "created_at", "updated_at"}).
+					AddRow("room-1", "ev-1", "Room A", 1, createdAt, updatedAt).
+					AddRow("room-2", "ev-1", "Room B", 2, createdAt, updatedAt)
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, created_at, updated_at`).
+					WithArgs("ev-1").
+					WillReturnRows(rows)
+			},
+			wantLen: 2,
+			wantErr: false,
+		},
+		{
+			name:    "success empty",
+			eventID: "ev-2",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, created_at, updated_at`).
+					WithArgs("ev-2").
+					WillReturnRows(sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "created_at", "updated_at"}))
+			},
+			wantLen: 0,
+			wantErr: false,
+		},
+		{
+			name:    "db error",
+			eventID: "ev-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, created_at, updated_at`).
+					WithArgs("ev-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantLen: 0,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			rooms, err := repo.ListRoomsByEventID(ctx, tt.eventID)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, rooms, tt.wantLen)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
+	ctx := context.Background()
+	startTime := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)
+	endTime := time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC)
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name    string
+		eventID string
+		mock    func(mock sqlmock.Sqlmock)
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "success one session",
+			eventID: "ev-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"id", "room_id", "sessionize_session_id", "title", "start_time", "end_time", "description", "created_at", "updated_at"}).
+					AddRow("sess-1", "room-1", "s1", "Talk 1", startTime, endTime, "Desc", createdAt, updatedAt)
+				mock.ExpectQuery(`SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at`).
+					WithArgs("ev-1").
+					WillReturnRows(rows)
+			},
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "success empty",
+			eventID: "ev-2",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at`).
+					WithArgs("ev-2").
+					WillReturnRows(sqlmock.NewRows([]string{"id", "room_id", "sessionize_session_id", "title", "start_time", "end_time", "description", "created_at", "updated_at"}))
+			},
+			wantLen: 0,
+			wantErr: false,
+		},
+		{
+			name:    "db error",
+			eventID: "ev-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at`).
+					WithArgs("ev-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantLen: 0,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			sessions, err := repo.ListSessionsByEventID(ctx, tt.eventID)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, sessions, tt.wantLen)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}

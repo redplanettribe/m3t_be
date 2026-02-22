@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -71,6 +72,49 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	h.WriteJSONSuccess(w, http.StatusCreated, event)
+}
+
+// GetEventByIDResponse is the response body for GET /events/{eventID}. Contains the event, its rooms, and sessions.
+type GetEventByIDResponse struct {
+	Event    *domain.Event    `json:"event"`
+	Rooms    []*domain.Room   `json:"rooms"`
+	Sessions []*domain.Session `json:"sessions"`
+}
+
+// GetEventByID godoc
+// @Summary Get an event by ID
+// @Description Returns the event, its rooms, and all sessions for that event. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} helpers.APIResponse "data contains event, rooms, and sessions"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID} [get]
+func (c *ScheduleController) GetEventByID(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		h.WriteJSONError(w, http.StatusBadRequest, h.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	_, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	event, rooms, sessions, err := c.Service.GetEventByID(r.Context(), eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			h.WriteJSONError(w, http.StatusNotFound, h.ErrCodeNotFound, "event not found")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		return
+	}
+	h.WriteJSONSuccess(w, http.StatusOK, GetEventByIDResponse{Event: event, Rooms: rooms, Sessions: sessions})
 }
 
 // ImportSessionize godoc

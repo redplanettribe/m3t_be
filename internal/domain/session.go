@@ -58,13 +58,14 @@ type SessionRepository interface {
 	CreateRoom(ctx context.Context, room *Room) error
 	CreateSession(ctx context.Context, session *Session) error
 	DeleteScheduleByEventID(ctx context.Context, eventID string) error
-	// GetSessionByID(ctx context.Context, id string) (*Session, error) // Future use
-	// ListSessions(ctx context.Context) ([]*Session, error) // Future use
+	ListRoomsByEventID(ctx context.Context, eventID string) ([]*Room, error)
+	ListSessionsByEventID(ctx context.Context, eventID string) ([]*Session, error)
 }
 
 // ManageScheduleService defines the business logic for managing schedule
 type ManageScheduleService interface {
 	CreateEvent(ctx context.Context, event *Event) error
+	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
 	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
 }

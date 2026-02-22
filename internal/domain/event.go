@@ -2,8 +2,12 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrNotFound is returned when a requested entity is not found (e.g. event by ID).
+var ErrNotFound = errors.New("not found")
 
 // Event represents a conference event
 type Event struct {

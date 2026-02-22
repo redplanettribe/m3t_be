@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"multitrackticketing/internal/domain"
 )
@@ -35,6 +36,9 @@ func (r *eventRepository) GetByID(ctx context.Context, id string) (*domain.Event
 	e := &domain.Event{}
 	err := r.DB.QueryRowContext(ctx, query, id).Scan(&e.ID, &e.Name, &e.Slug, &e.OwnerID, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
 		return nil, err
 	}
 	return e, nil

@@ -44,7 +44,7 @@ func (f *fakeEventRepo) GetByID(ctx context.Context, id string) (*domain.Event, 
 	if e, ok := f.byID[id]; ok {
 		return e, nil
 	}
-	return nil, errors.New("not found")
+	return nil, domain.ErrNotFound
 }
 
 func (f *fakeEventRepo) GetBySlug(ctx context.Context, slug string) (*domain.Event, error) {
@@ -134,6 +134,38 @@ func (f *fakeSessionRepo) DeleteScheduleByEventID(ctx context.Context, eventID s
 	}
 	f.sessions = sessions
 	return nil
+}
+
+func (f *fakeSessionRepo) ListRoomsByEventID(ctx context.Context, eventID string) ([]*domain.Room, error) {
+	var out []*domain.Room
+	for _, r := range f.rooms {
+		if r.EventID == eventID {
+			out = append(out, r)
+		}
+	}
+	if out == nil {
+		return []*domain.Room{}, nil
+	}
+	return out, nil
+}
+
+func (f *fakeSessionRepo) ListSessionsByEventID(ctx context.Context, eventID string) ([]*domain.Session, error) {
+	roomIDs := make(map[string]bool)
+	for _, r := range f.rooms {
+		if r.EventID == eventID {
+			roomIDs[r.ID] = true
+		}
+	}
+	var out []*domain.Session
+	for _, s := range f.sessions {
+		if roomIDs[s.RoomID] {
+			out = append(out, s)
+		}
+	}
+	if out == nil {
+		return []*domain.Session{}, nil
+	}
+	return out, nil
 }
 
 // fakeSessionizeFetcher returns fixed data or a configurable error.
@@ -389,6 +421,91 @@ func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, events, tt.wantLen)
 			tt.assert(t, events)
+		})
+	}
+}
+
+func TestManageScheduleService_GetEventByID(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name      string
+		setup     func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		eventID   string
+		wantErr   bool
+		wantNotFound bool
+		assert    func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session)
+	}{
+		{
+			name: "success with rooms and sessions",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				ev, _ := er.GetByID(ctx, "ev-1")
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: ev.ID, Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1"}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID: "ev-1",
+			wantErr: false,
+			wantNotFound: false,
+			assert: func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session) {
+				require.NotNil(t, event)
+				assert.Equal(t, "ev-1", event.ID)
+				assert.Equal(t, "Conf", event.Name)
+				require.Len(t, rooms, 1)
+				assert.Equal(t, "Room A", rooms[0].Name)
+				require.Len(t, sessions, 1)
+				assert.Equal(t, "Talk 1", sessions[0].Title)
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID: "ev-missing",
+			wantErr: true,
+			wantNotFound: true,
+			assert: func(t *testing.T, _ *domain.Event, _ []*domain.Room, _ []*domain.Session) {},
+		},
+		{
+			name: "success empty rooms and sessions",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID: "ev-1",
+			wantErr: false,
+			wantNotFound: false,
+			assert: func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session) {
+				require.NotNil(t, event)
+				assert.Equal(t, "ev-1", event.ID)
+				require.NotNil(t, rooms)
+				require.Len(t, rooms, 0)
+				require.NotNil(t, sessions)
+				require.Len(t, sessions, 0)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
+			event, rooms, sessions, err := svc.GetEventByID(ctx, tt.eventID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound), "expected ErrNotFound")
+				}
+				return
+			}
+			require.NoError(t, err)
+			tt.assert(t, event, rooms, sessions)
 		})
 	}
 }

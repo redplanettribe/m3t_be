@@ -157,6 +157,40 @@ paths:
       summary: Create a new event
       tags:
       - events
+  /events/{eventID}:
+    get:
+      description: Returns the event, its rooms, and all sessions for that event.
+        Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains event, rooms, and sessions
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get an event by ID
+      tags:
+      - events
   /events/{eventID}/import/sessionize/{sessionizeID}:
     post:
       description: Import rooms and sessions from Sessionize for a specific event

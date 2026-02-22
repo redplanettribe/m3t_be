@@ -27,10 +27,16 @@ type fakeManageScheduleService struct {
 	createEventErr         error
 	importSessionizeErr    error
 	listEventsByOwnerErr   error
+	getEventByIDErr        error
 	lastCreateEvent        *domain.Event
 	lastImportEventID      string
 	lastImportSessionizeID string
 	eventsByOwner          map[string][]*domain.Event // ownerID -> events to return
+	eventByID              map[string]struct {       // eventID -> event, rooms, sessions to return
+		event    *domain.Event
+		rooms    []*domain.Room
+		sessions []*domain.Session
+	}
 }
 
 func (f *fakeManageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
@@ -58,6 +64,18 @@ func (f *fakeManageScheduleService) ListEventsByOwner(ctx context.Context, owner
 		}
 	}
 	return []*domain.Event{}, nil
+}
+
+func (f *fakeManageScheduleService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {
+	if f.getEventByIDErr != nil {
+		return nil, nil, nil, f.getEventByIDErr
+	}
+	if f.eventByID != nil {
+		if data, ok := f.eventByID[eventID]; ok {
+			return data.event, data.rooms, data.sessions, nil
+		}
+	}
+	return nil, nil, nil, domain.ErrNotFound
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -328,6 +346,122 @@ func TestScheduleController_ListMyEvents(t *testing.T) {
 				var events []domain.Event
 				require.NoError(t, json.Unmarshal(dataBytes, &events))
 				tt.checkEvents(t, events)
+			}
+			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
+				require.NotNil(t, envelope.Error, "error response must have error set")
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
+			}
+		})
+	}
+}
+
+func TestScheduleController_GetEventByID(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		noUserContext  bool
+		fakeErr        error
+		eventByID      map[string]struct {
+			event    *domain.Event
+			rooms    []*domain.Room
+			sessions []*domain.Session
+		}
+		wantStatus     int
+		wantBodySubstr string
+		checkResponse  func(t *testing.T, data GetEventByIDResponse)
+	}{
+		{
+			name:    "success",
+			eventID: "ev-123",
+			eventByID: map[string]struct {
+				event    *domain.Event
+				rooms    []*domain.Room
+				sessions []*domain.Session
+			}{
+				"ev-123": {
+					event:    &domain.Event{ID: "ev-123", Name: "Conf 2025", Slug: "conf-2025", OwnerID: "user-1"},
+					rooms:    []*domain.Room{{ID: "room-1", EventID: "ev-123", Name: "Room A"}},
+					sessions: []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1"}},
+				},
+			},
+			wantStatus:     http.StatusOK,
+			wantBodySubstr: "",
+			checkResponse: func(t *testing.T, data GetEventByIDResponse) {
+				require.NotNil(t, data.Event)
+				assert.Equal(t, "ev-123", data.Event.ID)
+				assert.Equal(t, "Conf 2025", data.Event.Name)
+				require.Len(t, data.Rooms, 1)
+				assert.Equal(t, "room-1", data.Rooms[0].ID)
+				assert.Equal(t, "Room A", data.Rooms[0].Name)
+				require.Len(t, data.Sessions, 1)
+				assert.Equal(t, "sess-1", data.Sessions[0].ID)
+				assert.Equal(t, "Talk 1", data.Sessions[0].Title)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+			checkResponse:  nil,
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-123",
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+			checkResponse: nil,
+		},
+		{
+			name:    "event not found",
+			eventID: "ev-missing",
+			eventByID: map[string]struct {
+				event    *domain.Event
+				rooms    []*domain.Room
+				sessions []*domain.Session
+			}{},
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+			checkResponse:  nil,
+		},
+		{
+			name:     "service error",
+			eventID:  "ev-123",
+			fakeErr:  errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+			checkResponse:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{
+				getEventByIDErr: tt.fakeErr,
+				eventByID:       tt.eventByID,
+			}
+			ctrl := NewScheduleController(testLogger, fake)
+			req := httptest.NewRequest(http.MethodGet, "http://test/events/"+tt.eventID, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.GetEventByID(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code, "status code")
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
+			if tt.wantStatus == http.StatusOK && tt.checkResponse != nil {
+				require.Nil(t, envelope.Error, "success response must have error nil")
+				dataBytes, err := json.Marshal(envelope.Data)
+				require.NoError(t, err)
+				var data GetEventByIDResponse
+				require.NoError(t, json.Unmarshal(dataBytes, &data))
+				tt.checkResponse(t, data)
 			}
 			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
 				require.NotNil(t, envelope.Error, "error response must have error set")

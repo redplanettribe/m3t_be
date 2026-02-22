@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,6 +37,37 @@ func (s *manageScheduleService) CreateEvent(ctx context.Context, event *domain.E
 	event.UpdatedAt = time.Now()
 
 	return s.eventRepo.Create(ctx, event)
+}
+
+func (s *manageScheduleService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil, nil, domain.ErrNotFound
+		}
+		return nil, nil, nil, fmt.Errorf("get event: %w", err)
+	}
+
+	rooms, err := s.sessionRepo.ListRoomsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("list rooms: %w", err)
+	}
+	if rooms == nil {
+		rooms = []*domain.Room{}
+	}
+
+	sessions, err := s.sessionRepo.ListSessionsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("list sessions: %w", err)
+	}
+	if sessions == nil {
+		sessions = []*domain.Session{}
+	}
+
+	return event, rooms, sessions, nil
 }
 
 func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
