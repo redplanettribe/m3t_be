@@ -26,6 +26,20 @@ definitions:
         description: 'optional: "admin" or "attendee" (defaults to "attendee")'
         type: string
     type: object
+  controllers.UpdateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+    type: object
+  handlers.CreateEventRequest:
+    properties:
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
   helpers.APIError:
     properties:
       code:
@@ -124,7 +138,7 @@ paths:
         name: event
         required: true
         schema:
-          $ref: '#/definitions/controllers.CreateEventRequest'
+          $ref: '#/definitions/handlers.CreateEventRequest'
       produces:
       - application/json
       responses:
@@ -173,4 +187,81 @@ paths:
       summary: Import schedule from Sessionize
       tags:
       - events
+  /users/me:
+    get:
+      description: Returns the authenticated user's profile (id, email, name, created_at,
+        updated_at). Requires Bearer token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the user
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - users
+    patch:
+      consumes:
+      - application/json
+      description: Update the authenticated user's profile. Accepts optional name
+        and/or email. Email must be unique. Requires Bearer token.
+      parameters:
+      - description: Fields to update (name and/or email, both optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the updated user
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "409":
+          description: 'error.code: conflict'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update current user
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

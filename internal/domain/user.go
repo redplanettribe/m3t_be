@@ -2,7 +2,14 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
+)
+
+// Sentinel errors for user operations.
+var (
+	ErrUserNotFound    = errors.New("user not found")
+	ErrDuplicateEmail  = errors.New("email already in use")
 )
 
 // User represents a registered user
@@ -52,12 +59,24 @@ type TokenIssuer interface {
 	Issue(userID, email string, roles []string, expiry time.Duration) (string, error)
 }
 
+// TokenVerifier verifies a token and returns the authenticated user ID.
+type TokenVerifier interface {
+	Verify(token string) (userID string, err error)
+}
+
 // UserRepository defines the interface for user storage
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	GetByID(ctx context.Context, id string) (*User, error)
+	Update(ctx context.Context, user *User) error
 	AssignRole(ctx context.Context, userID, roleID string) error
+}
+
+// UserService defines the business logic for user profile operations.
+type UserService interface {
+	GetByID(ctx context.Context, id string) (*User, error)
+	Update(ctx context.Context, user *User) error
 }
 
 // RoleRepository defines the interface for role storage

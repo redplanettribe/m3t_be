@@ -8,8 +8,16 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-// NewRouter initializes the HTTP router with all application routes
-func NewRouter(scheduleController *controllers.ScheduleController, authController *controllers.AuthController) *http.ServeMux {
+// AuthWrap is a function that wraps a handler to require authentication.
+type AuthWrap func(http.HandlerFunc) http.HandlerFunc
+
+// NewRouter initializes the HTTP router with all application routes.
+func NewRouter(
+	scheduleController *controllers.ScheduleController,
+	authController *controllers.AuthController,
+	userController *controllers.UserController,
+	requireAuth AuthWrap,
+) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// API Routes
@@ -19,6 +27,10 @@ func NewRouter(scheduleController *controllers.ScheduleController, authControlle
 	// Auth
 	mux.HandleFunc("POST /auth/signup", authController.SignUp)
 	mux.HandleFunc("POST /auth/login", authController.Login)
+
+	// Users (protected)
+	mux.HandleFunc("GET /users/me", requireAuth(userController.GetMe))
+	mux.HandleFunc("PATCH /users/me", requireAuth(userController.UpdateMe))
 
 	// Swagger
 	mux.Handle("/swagger/", httpSwagger.WrapHandler)

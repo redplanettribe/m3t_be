@@ -24,6 +24,9 @@ import (
 // @description This is the backend API for a conference ticketing system.
 // @host localhost:8080
 // @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	logger := config.NewLogger()
 
@@ -66,12 +69,16 @@ func main() {
 		jwtSecret = "dev-secret-change-in-production"
 	}
 	passwordHasher := auth.NewBcryptHasher(10)
-	tokenIssuer := auth.NewJWTIssuer(jwtSecret, cfg.JWTExpiry)
-	authService := services.NewAuthService(userRepo, roleRepo, passwordHasher, tokenIssuer, cfg.JWTExpiry)
+	jwtAuth := auth.NewJWTIssuer(jwtSecret, cfg.JWTExpiry)
+	authService := services.NewAuthService(userRepo, roleRepo, passwordHasher, jwtAuth, cfg.JWTExpiry)
 	authController := controllers.NewAuthController(logger, authService)
 
+	userService := services.NewUserService(userRepo)
+	userController := controllers.NewUserController(logger, userService)
+	requireAuth := middleware.RequireAuth(jwtAuth, logger)
+
 	// 4. Router
-	mux := httpDelivery.NewRouter(scheduleController, authController)
+	mux := httpDelivery.NewRouter(scheduleController, authController, userController, requireAuth)
 	handler := middleware.LoggingMiddleware(logger, mux)
 
 	// 5. Server

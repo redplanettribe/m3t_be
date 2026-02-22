@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"multitrackticketing/internal/domain"
 )
 
 type jwtClaims struct {
@@ -18,10 +17,28 @@ type jwtIssuer struct {
 	secret []byte
 }
 
-// NewJWTIssuer returns a TokenIssuer that signs JWTs with HS256 using the given secret.
-// The expiry passed to Issue is used for each token.
-func NewJWTIssuer(secret string, _ time.Duration) domain.TokenIssuer {
+// NewJWTIssuer returns a TokenIssuer and TokenVerifier that sign/verify JWTs with HS256 using the given secret.
+// The expiry passed to Issue is used for each token. The same value implements domain.TokenVerifier for protected routes.
+func NewJWTIssuer(secret string, _ time.Duration) *jwtIssuer {
 	return &jwtIssuer{secret: []byte(secret)}
+}
+
+// Verify parses and validates the JWT and returns the subject (user ID). Implements domain.TokenVerifier.
+func (i *jwtIssuer) Verify(tokenString string) (string, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return i.secret, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("invalid or expired token: %w", err)
+	}
+	claims, ok := token.Claims.(*jwtClaims)
+	if !ok || !token.Valid {
+		return "", fmt.Errorf("invalid token claims")
+	}
+	return claims.Subject, nil
 }
 
 func (i *jwtIssuer) Issue(userID, email string, roles []string, expiry time.Duration) (string, error) {

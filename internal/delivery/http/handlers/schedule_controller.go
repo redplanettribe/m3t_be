@@ -45,9 +45,9 @@ func NewScheduleController(logger *slog.Logger, svc domain.ManageScheduleService
 // @Accept json
 // @Produce json
 // @Param event body CreateEventRequest true "Event data (name and slug only)"
-// @Success 201 {object} APIResponse "data contains the created event"
-// @Failure 400 {object} APIResponse "error.code: bad_request"
-// @Failure 500 {object} APIResponse "error.code: internal_error"
+// @Success 201 {object} helpers.APIResponse "data contains the created event"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /events [post]
 func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var req CreateEventRequest
@@ -71,9 +71,9 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 // @Tags events
 // @Param eventID path string true "Event ID"
 // @Param sessionizeID path string true "Sessionize ID"
-// @Success 200 {object} APIResponse "data contains status message"
-// @Failure 400 {object} APIResponse "error.code: bad_request"
-// @Failure 500 {object} APIResponse "error.code: internal_error"
+// @Success 200 {object} helpers.APIResponse "data contains status message"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /events/{eventID}/import/sessionize/{sessionizeID} [post]
 func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Request) {
 	eventID := r.PathValue("eventID")

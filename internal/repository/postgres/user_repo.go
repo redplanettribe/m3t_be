@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
+
+	"github.com/lib/pq"
 	"multitrackticketing/internal/domain"
 )
 
@@ -49,6 +52,27 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, 
 		return nil, err
 	}
 	return u, nil
+}
+
+func (r *userRepository) Update(ctx context.Context, u *domain.User) error {
+	query := `
+		UPDATE users
+		SET name = $1, email = $2, updated_at = $3
+		WHERE id = $4
+	`
+	result, err := r.DB.ExecContext(ctx, query, u.Name, u.Email, u.UpdatedAt, u.ID)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return domain.ErrDuplicateEmail
+		}
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
 }
 
 func (r *userRepository) AssignRole(ctx context.Context, userID, roleID string) error {

@@ -9,6 +9,8 @@ import (
 const (
 	ErrCodeBadRequest    = "bad_request"
 	ErrCodeUnauthorized  = "unauthorized"
+	ErrCodeNotFound      = "not_found"
+	ErrCodeConflict      = "conflict"
 	ErrCodeInternalError = "internal_error"
 )
 
