@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"log/slog"
-	h "multitrackticketing/internal/delivery/http/helpers"
-	"multitrackticketing/internal/domain"
 	"net/http"
 	"time"
+
+	h "multitrackticketing/internal/delivery/http/helpers"
+	"multitrackticketing/internal/delivery/http/middleware"
+	"multitrackticketing/internal/domain"
 )
 
 // CreateEventRequest is the request body for POST /events. Only name and slug are accepted.
@@ -40,13 +42,15 @@ func NewScheduleController(logger *slog.Logger, svc domain.ManageScheduleService
 
 // CreateEvent godoc
 // @Summary Create a new event
-// @Description Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated.
+// @Description Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated. The authenticated user becomes the event owner.
 // @Tags events
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param event body CreateEventRequest true "Event data (name and slug only)"
 // @Success 201 {object} helpers.APIResponse "data contains the created event"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /events [post]
 func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -54,14 +58,18 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 	if !h.DecodeAndValidate(w, r, &req) {
 		return
 	}
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
 	now := time.Now()
-	event := domain.NewEvent(req.Name, req.Slug, now, now)
+	event := domain.NewEvent(req.Name, req.Slug, userID, now, now)
 	if err := c.Service.CreateEvent(r.Context(), event); err != nil {
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
 		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
 		return
 	}
-
 	h.WriteJSONSuccess(w, http.StatusCreated, event)
 }
 
@@ -69,10 +77,12 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 // @Summary Import schedule from Sessionize
 // @Description Import rooms and sessions from Sessionize for a specific event
 // @Tags events
+// @Security BearerAuth
 // @Param eventID path string true "Event ID"
 // @Param sessionizeID path string true "Sessionize ID"
 // @Success 200 {object} helpers.APIResponse "data contains status message"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
 // @Router /events/{eventID}/import/sessionize/{sessionizeID} [post]
 func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Request) {
@@ -91,4 +101,32 @@ func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Req
 	}
 
 	h.WriteJSONSuccess(w, http.StatusOK, map[string]string{"status": "imported successfully"})
+}
+
+// ListMyEvents godoc
+// @Summary List events owned by the current user
+// @Description Returns events where the authenticated user is the owner. Requires Bearer token.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} helpers.APIResponse "data is an array of events"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/me [get]
+func (c *ScheduleController) ListMyEvents(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		h.WriteJSONError(w, http.StatusUnauthorized, h.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	events, err := c.Service.ListEventsByOwner(r.Context(), userID)
+	if err != nil {
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		h.WriteJSONError(w, http.StatusInternalServerError, h.ErrCodeInternalError, err.Error())
+		return
+	}
+	if events == nil {
+		events = []*domain.Event{}
+	}
+	h.WriteJSONSuccess(w, http.StatusOK, events)
 }

@@ -33,13 +33,6 @@ definitions:
       name:
         type: string
     type: object
-  handlers.CreateEventRequest:
-    properties:
-      name:
-        type: string
-      slug:
-        type: string
-    type: object
   helpers.APIError:
     properties:
       code:
@@ -131,14 +124,15 @@ paths:
       consumes:
       - application/json
       description: Create a new conference event. Only name and slug are accepted
-        in the body; id and timestamps are server-generated.
+        in the body; id and timestamps are server-generated. The authenticated user
+        becomes the event owner.
       parameters:
       - description: Event data (name and slug only)
         in: body
         name: event
         required: true
         schema:
-          $ref: '#/definitions/handlers.CreateEventRequest'
+          $ref: '#/definitions/controllers.CreateEventRequest'
       produces:
       - application/json
       responses:
@@ -150,10 +144,16 @@ paths:
           description: 'error.code: bad_request'
           schema:
             $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
         "500":
           description: 'error.code: internal_error'
           schema:
             $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Create a new event
       tags:
       - events
@@ -180,11 +180,41 @@ paths:
           description: 'error.code: bad_request'
           schema:
             $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
         "500":
           description: 'error.code: internal_error'
           schema:
             $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
       summary: Import schedule from Sessionize
+      tags:
+      - events
+  /events/me:
+    get:
+      description: Returns events where the authenticated user is the owner. Requires
+        Bearer token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data is an array of events
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List events owned by the current user
       tags:
       - events
   /users/me:

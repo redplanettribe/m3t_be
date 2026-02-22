@@ -115,7 +115,12 @@ const docTemplate = `{
         },
         "/events": {
             "post": {
-                "description": "Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated. The authenticated user becomes the event owner.",
                 "consumes": [
                     "application/json"
                 ],
@@ -133,7 +138,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.CreateEventRequest"
+                            "$ref": "#/definitions/controllers.CreateEventRequest"
                         }
                     }
                 ],
@@ -150,6 +155,49 @@ const docTemplate = `{
                             "$ref": "#/definitions/helpers.APIResponse"
                         }
                     },
+                    "401": {
+                        "description": "error.code: unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "error.code: internal_error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns events where the authenticated user is the owner. Requires Bearer token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "List events owned by the current user",
+                "responses": {
+                    "200": {
+                        "description": "data is an array of events",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "error.code: unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
                     "500": {
                         "description": "error.code: internal_error",
                         "schema": {
@@ -161,6 +209,11 @@ const docTemplate = `{
         },
         "/events/{eventID}/import/sessionize/{sessionizeID}": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Import rooms and sessions from Sessionize for a specific event",
                 "tags": [
                     "events"
@@ -191,6 +244,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "error.code: bad_request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "error.code: unauthorized",
                         "schema": {
                             "$ref": "#/definitions/helpers.APIResponse"
                         }
@@ -363,17 +422,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateEventRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
                     "type": "string"
                 }
             }
