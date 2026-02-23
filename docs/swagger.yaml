@@ -101,6 +101,9 @@ definitions:
     properties:
       email:
         type: string
+      last_name:
+        description: optional
+        type: string
       name:
         type: string
       password:
@@ -126,6 +129,8 @@ definitions:
   controllers.UpdateUserRequest:
     properties:
       email:
+        type: string
+      last_name:
         type: string
       name:
         type: string
@@ -201,6 +206,8 @@ definitions:
       email:
         type: string
       id:
+        type: string
+      last_name:
         type: string
       name:
         type: string
@@ -536,10 +543,10 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Update the authenticated user's profile. Accepts optional name
-        and/or email. Email must be unique. Requires Bearer token.
+      description: Update the authenticated user's profile. Accepts optional name,
+        last_name, and/or email. Email must be unique. Requires Bearer token.
       parameters:
-      - description: Fields to update (name and/or email, both optional)
+      - description: Fields to update (name, last_name, and/or email, all optional)
         in: body
         name: body
         required: true

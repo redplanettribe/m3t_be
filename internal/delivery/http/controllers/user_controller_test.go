@@ -33,7 +33,7 @@ type fakeUserService struct {
 	loginErr    error
 }
 
-func (f *fakeUserService) SignUp(ctx context.Context, email, password, name, role string) (*domain.User, error) {
+func (f *fakeUserService) SignUp(ctx context.Context, email, password, name, lastName, role string) (*domain.User, error) {
 	if f.signUpErr != nil {
 		return nil, f.signUpErr
 	}

@@ -62,6 +62,7 @@ Table users {
   password_hash text [not null]
   salt text [not null]
   name varchar(255)
+  last_name varchar(255)
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 }

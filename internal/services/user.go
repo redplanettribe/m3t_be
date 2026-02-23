@@ -38,7 +38,7 @@ func NewUserService(userRepo domain.UserRepository, roleRepo domain.RoleReposito
 	}
 }
 
-func (s *userService) SignUp(ctx context.Context, email, password, name, role string) (*domain.User, error) {
+func (s *userService) SignUp(ctx context.Context, email, password, name, lastName, role string) (*domain.User, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if !emailRegexp.MatchString(email) {
 		return nil, fmt.Errorf("invalid email format")
@@ -62,7 +62,7 @@ func (s *userService) SignUp(ctx context.Context, email, password, name, role st
 	}
 
 	now := time.Now()
-	user := domain.NewUser(email, hash, salt, strings.TrimSpace(name), now, now)
+	user := domain.NewUser(email, hash, salt, strings.TrimSpace(name), strings.TrimSpace(lastName), now, now)
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -116,6 +116,7 @@ func (s *userService) GetByID(ctx context.Context, id string) (*domain.User, err
 
 func (s *userService) Update(ctx context.Context, user *domain.User) error {
 	user.Name = strings.TrimSpace(user.Name)
+	user.LastName = strings.TrimSpace(user.LastName)
 	if user.Email != "" && !emailRegexp.MatchString(user.Email) {
 		return fmt.Errorf("invalid email format")
 	}

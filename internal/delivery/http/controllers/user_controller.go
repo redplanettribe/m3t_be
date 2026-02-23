@@ -19,7 +19,8 @@ type SignUpRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
-	Role     string `json:"role"` // optional: "admin" or "attendee" (defaults to "attendee")
+	LastName string `json:"last_name"` // optional
+	Role     string `json:"role"`      // optional: "admin" or "attendee" (defaults to "attendee")
 }
 
 // Validate implements Validator.
@@ -71,10 +72,11 @@ type LoginResponse struct {
 	User      *domain.User `json:"user"`
 }
 
-// UpdateUserRequest is the request body for PATCH /users/me. Both fields are optional.
+// UpdateUserRequest is the request body for PATCH /users/me. All fields are optional.
 type UpdateUserRequest struct {
-	Name  *string `json:"name"`
-	Email *string `json:"email"`
+	Name     *string `json:"name"`
+	LastName *string `json:"last_name"`
+	Email    *string `json:"email"`
 }
 
 // Validate implements Validator.
@@ -150,7 +152,7 @@ func (c *UserController) SignUp(w http.ResponseWriter, r *http.Request) {
 	if role == "atendee" {
 		role = "attendee"
 	}
-	user, err := c.Service.SignUp(r.Context(), email, req.Password, req.Name, role)
+	user, err := c.Service.SignUp(r.Context(), email, req.Password, req.Name, req.LastName, role)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "already exists") {
 			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "email already registered")
@@ -231,12 +233,12 @@ func (c *UserController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 // UpdateMe godoc
 // @Summary Update current user
-// @Description Update the authenticated user's profile. Accepts optional name and/or email. Email must be unique. Requires Bearer token.
+// @Description Update the authenticated user's profile. Accepts optional name, last_name, and/or email. Email must be unique. Requires Bearer token.
 // @Tags users
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body UpdateUserRequest true "Fields to update (name and/or email, both optional)"
+// @Param body body UpdateUserRequest true "Fields to update (name, last_name, and/or email, all optional)"
 // @Success 200 {object} controllers.UpdateUserSuccessResponse "data contains the updated user"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
@@ -266,6 +268,9 @@ func (c *UserController) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name != nil {
 		user.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.LastName != nil {
+		user.LastName = strings.TrimSpace(*req.LastName)
 	}
 	if req.Email != nil {
 		user.Email = strings.TrimSpace(strings.ToLower(*req.Email))

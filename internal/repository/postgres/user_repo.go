@@ -19,21 +19,21 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 
 func (r *userRepository) Create(ctx context.Context, u *domain.User) error {
 	query := `
-		INSERT INTO users (email, password_hash, salt, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (email, password_hash, salt, name, last_name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
 	`
-	return r.DB.QueryRowContext(ctx, query, u.Email, u.PasswordHash, u.Salt, u.Name, u.CreatedAt, u.UpdatedAt).Scan(&u.ID)
+	return r.DB.QueryRowContext(ctx, query, u.Email, u.PasswordHash, u.Salt, u.Name, u.LastName, u.CreatedAt, u.UpdatedAt).Scan(&u.ID)
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, salt, name, created_at, updated_at
+		SELECT id, email, password_hash, salt, name, last_name, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 	u := &domain.User{}
-	err := r.DB.QueryRowContext(ctx, query, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &u.Name, &u.CreatedAt, &u.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &u.Name, &u.LastName, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -42,12 +42,12 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.
 
 func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, salt, name, created_at, updated_at
+		SELECT id, email, password_hash, salt, name, last_name, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	u := &domain.User{}
-	err := r.DB.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &u.Name, &u.CreatedAt, &u.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &u.Name, &u.LastName, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +57,10 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, 
 func (r *userRepository) Update(ctx context.Context, u *domain.User) error {
 	query := `
 		UPDATE users
-		SET name = $1, email = $2, updated_at = $3
-		WHERE id = $4
+		SET name = $1, last_name = $2, email = $3, updated_at = $4
+		WHERE id = $5
 	`
-	result, err := r.DB.ExecContext(ctx, query, u.Name, u.Email, u.UpdatedAt, u.ID)
+	result, err := r.DB.ExecContext(ctx, query, u.Name, u.LastName, u.Email, u.UpdatedAt, u.ID)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {

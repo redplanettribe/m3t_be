@@ -33,7 +33,7 @@ func TestUserRepository_Update(t *testing.T) {
 			},
 			mock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectExec(`UPDATE users`).
-					WithArgs("Alice", "alice@example.com", time.Date(2025, 2, 1, 12, 0, 0, 0, time.UTC), "user-uuid-1").
+					WithArgs("Alice", "", "alice@example.com", time.Date(2025, 2, 1, 12, 0, 0, 0, time.UTC), "user-uuid-1").
 					WillReturnResult(sqlmock.NewResult(0, 1))
 			},
 			wantErr: false,
@@ -48,7 +48,7 @@ func TestUserRepository_Update(t *testing.T) {
 			},
 			mock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectExec(`UPDATE users`).
-					WithArgs("A", "a@b.com", sqlmock.AnyArg(), "nonexistent").
+					WithArgs("A", "", "a@b.com", sqlmock.AnyArg(), "nonexistent").
 					WillReturnResult(sqlmock.NewResult(0, 0))
 			},
 			wantErr: true,

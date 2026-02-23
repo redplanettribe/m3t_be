@@ -20,17 +20,19 @@ type User struct {
 	PasswordHash string    `json:"-"`
 	Salt         string    `json:"-"` // per-user salt used when hashing password
 	Name         string    `json:"name"`
+	LastName     string    `json:"last_name"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // NewUser returns a new User with the given fields. ID is typically set by the repository on create.
-func NewUser(email, passwordHash, salt, name string, createdAt, updatedAt time.Time) *User {
+func NewUser(email, passwordHash, salt, name, lastName string, createdAt, updatedAt time.Time) *User {
 	return &User{
 		Email:        email,
 		PasswordHash: passwordHash,
 		Salt:         salt,
 		Name:         name,
+		LastName:     lastName,
 		CreatedAt:    createdAt,
 		UpdatedAt:    updatedAt,
 	}
@@ -76,7 +78,7 @@ type UserRepository interface {
 
 // UserService defines the business logic for user profile and authentication.
 type UserService interface {
-	SignUp(ctx context.Context, email, password, name, role string) (*User, error)
+	SignUp(ctx context.Context, email, password, name, lastName, role string) (*User, error)
 	Login(ctx context.Context, email, password string) (token string, user *User, err error)
 	GetByID(ctx context.Context, id string) (*User, error)
 	Update(ctx context.Context, user *User) error

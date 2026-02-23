@@ -298,7 +298,7 @@ func TestUserService_SignUp(t *testing.T) {
 	issuer := &fakeTokenIssuer{}
 	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour)
 
-	user, err := svc.SignUp(ctx, "alice@example.com", "password8", "Alice", "attendee")
+	user, err := svc.SignUp(ctx, "alice@example.com", "password8", "Alice", "", "attendee")
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	assert.Equal(t, "created-1", user.ID)
@@ -307,7 +307,7 @@ func TestUserService_SignUp(t *testing.T) {
 	assert.Equal(t, "h", user.PasswordHash)
 	assert.Equal(t, "s", user.Salt)
 	// default role when invalid
-	user2, err := svc.SignUp(ctx, "bob@example.com", "password9", "Bob", "invalid")
+	user2, err := svc.SignUp(ctx, "bob@example.com", "password9", "Bob", "", "invalid")
 	require.NoError(t, err)
 	require.NotNil(t, user2)
 	assert.Equal(t, "bob@example.com", user2.Email)
