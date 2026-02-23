@@ -371,6 +371,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/events/{eventID}/rooms/{roomID}/not-bookable": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Toggles the not_bookable flag for a room. Only the event owner can toggle. Requires authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Toggle room not_bookable flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID (UUID)",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Room ID (UUID)",
+                        "name": "roomID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "data contains the updated room",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.ToggleRoomNotBookableSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "error.code: unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "error.code: forbidden (not owner)",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "error.code: not_found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "error.code: internal_error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "get": {
                 "security": [
@@ -664,6 +729,17 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.ToggleRoomNotBookableSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.Room"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
         "controllers.UpdateUserRequest": {
             "type": "object",
             "properties": {
@@ -723,6 +799,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "not_bookable": {
+                    "type": "boolean"
                 },
                 "sessionize_room_id": {
                     "type": "integer"

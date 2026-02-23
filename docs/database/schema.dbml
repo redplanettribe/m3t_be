@@ -19,6 +19,7 @@ Table rooms {
   event_id uuid [not null, ref: > events.id]
   name varchar(255) [not null]
   sessionize_room_id int
+  not_bookable boolean [not null, default: `false`]
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 

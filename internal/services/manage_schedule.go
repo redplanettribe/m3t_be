@@ -118,7 +118,7 @@ func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventI
 	roomMap := make(map[int]string) // sessionize_id -> domain_id
 	for sID, name := range uniqueRooms {
 		now := time.Now()
-		r := domain.NewRoom(eventID, name, sID, now, now)
+		r := domain.NewRoom(eventID, name, sID, false, now, now)
 		if err := s.sessionRepo.CreateRoom(ctx, r); err != nil {
 			return fmt.Errorf("failed to create room %s: %w", name, err)
 		}
@@ -179,4 +179,37 @@ func (s *manageScheduleService) DeleteEvent(ctx context.Context, eventID string,
 		return fmt.Errorf("delete event: %w", err)
 	}
 	return nil
+}
+
+func (s *manageScheduleService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+
+	room, err := s.sessionRepo.GetRoomByID(ctx, roomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+
+	updated, err := s.sessionRepo.SetRoomNotBookable(ctx, roomID, !room.NotBookable)
+	if err != nil {
+		return nil, fmt.Errorf("set room not_bookable: %w", err)
+	}
+	return updated, nil
 }

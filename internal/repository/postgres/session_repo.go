@@ -20,13 +20,13 @@ func NewSessionRepository(db *sql.DB) domain.SessionRepository {
 
 func (r *SessionRepository) CreateRoom(ctx context.Context, room *domain.Room) error {
 	query := `
-		INSERT INTO rooms (event_id, name, sessionize_room_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO rooms (event_id, name, sessionize_room_id, not_bookable, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (event_id, sessionize_room_id) DO UPDATE 
 		SET name = EXCLUDED.name, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
-	return r.DB.QueryRowContext(ctx, query, room.EventID, room.Name, room.SessionizeRoomID, room.CreatedAt, room.UpdatedAt).Scan(&room.ID)
+	return r.DB.QueryRowContext(ctx, query, room.EventID, room.Name, room.SessionizeRoomID, room.NotBookable, room.CreatedAt, room.UpdatedAt).Scan(&room.ID)
 }
 
 func (r *SessionRepository) CreateSession(ctx context.Context, s *domain.Session) error {
@@ -58,9 +58,26 @@ func (r *SessionRepository) DeleteScheduleByEventID(ctx context.Context, eventID
 	return err
 }
 
+func (r *SessionRepository) GetRoomByID(ctx context.Context, roomID string) (*domain.Room, error) {
+	query := `
+		SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at
+		FROM rooms
+		WHERE id = $1
+	`
+	room := &domain.Room{}
+	err := r.DB.QueryRowContext(ctx, query, roomID).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.CreatedAt, &room.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return room, nil
+}
+
 func (r *SessionRepository) ListRoomsByEventID(ctx context.Context, eventID string) ([]*domain.Room, error) {
 	query := `
-		SELECT id, event_id, name, sessionize_room_id, created_at, updated_at
+		SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at
 		FROM rooms
 		WHERE event_id = $1
 		ORDER BY name
@@ -73,12 +90,30 @@ func (r *SessionRepository) ListRoomsByEventID(ctx context.Context, eventID stri
 	var rooms []*domain.Room
 	for rows.Next() {
 		room := &domain.Room{}
-		if err := rows.Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		if err := rows.Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.CreatedAt, &room.UpdatedAt); err != nil {
 			return nil, err
 		}
 		rooms = append(rooms, room)
 	}
 	return rooms, rows.Err()
+}
+
+func (r *SessionRepository) SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*domain.Room, error) {
+	query := `
+		UPDATE rooms
+		SET not_bookable = $2, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at
+	`
+	room := &domain.Room{}
+	err := r.DB.QueryRowContext(ctx, query, roomID, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.CreatedAt, &room.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return room, nil
 }
 
 func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID string) ([]*domain.Session, error) {

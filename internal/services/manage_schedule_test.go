@@ -146,6 +146,15 @@ func (f *fakeSessionRepo) DeleteScheduleByEventID(ctx context.Context, eventID s
 	return nil
 }
 
+func (f *fakeSessionRepo) GetRoomByID(ctx context.Context, roomID string) (*domain.Room, error) {
+	for _, r := range f.rooms {
+		if r.ID == roomID {
+			return r, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 func (f *fakeSessionRepo) ListRoomsByEventID(ctx context.Context, eventID string) ([]*domain.Room, error) {
 	var out []*domain.Room
 	for _, r := range f.rooms {
@@ -157,6 +166,16 @@ func (f *fakeSessionRepo) ListRoomsByEventID(ctx context.Context, eventID string
 		return []*domain.Room{}, nil
 	}
 	return out, nil
+}
+
+func (f *fakeSessionRepo) SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*domain.Room, error) {
+	for _, r := range f.rooms {
+		if r.ID == roomID {
+			r.NotBookable = notBookable
+			return r, nil
+		}
+	}
+	return nil, domain.ErrNotFound
 }
 
 func (f *fakeSessionRepo) ListSessionsByEventID(ctx context.Context, eventID string) ([]*domain.Session, error) {
@@ -594,6 +613,137 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 			if tt.assertDeleted {
 				_, err := eventRepo.GetByID(ctx, tt.eventID)
 				require.True(t, errors.Is(err, domain.ErrNotFound), "event should be deleted")
+			}
+		})
+	}
+}
+
+func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		eventID       string
+		roomID        string
+		ownerID       string
+		wantErr       bool
+		wantNotFound  bool
+		wantForbidden bool
+		assert        func(t *testing.T, room *domain.Room)
+	}{
+		{
+			name: "success toggles false to true",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A", NotBookable: false}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID: "ev-1",
+			roomID:  "room-1",
+			ownerID: "user-1",
+			wantErr: false,
+			assert: func(t *testing.T, room *domain.Room) {
+				require.NotNil(t, room)
+				require.True(t, room.NotBookable, "expected NotBookable to be true after toggle")
+				require.Equal(t, "room-1", room.ID)
+			},
+		},
+		{
+			name: "success toggles true to false",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A", NotBookable: true}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID: "ev-1",
+			roomID:  "room-1",
+			ownerID: "user-1",
+			wantErr: false,
+			assert: func(t *testing.T, room *domain.Room) {
+				require.NotNil(t, room)
+				require.False(t, room.NotBookable, "expected NotBookable to be false after toggle")
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-missing",
+			roomID:       "room-1",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			roomID:        "room-1",
+			ownerID:       "user-2",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name: "room not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-1",
+			roomID:       "room-missing",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "room belongs to different event",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-99", Name: "Room A"}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-1",
+			roomID:       "room-1",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
+			room, err := svc.ToggleRoomNotBookable(ctx, tt.eventID, tt.roomID, tt.ownerID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.assert != nil {
+				tt.assert(t, room)
 			}
 		})
 	}

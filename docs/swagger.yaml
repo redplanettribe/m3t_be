@@ -116,6 +116,13 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.ToggleRoomNotBookableSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Room'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.UpdateUserRequest:
     properties:
       email:
@@ -155,6 +162,8 @@ definitions:
         type: string
       name:
         type: string
+      not_bookable:
+        type: boolean
       sessionize_room_id:
         type: integer
       updated_at:
@@ -427,6 +436,49 @@ paths:
       security:
       - BearerAuth: []
       summary: Import schedule from Sessionize
+      tags:
+      - events
+  /events/{eventID}/rooms/{roomID}/not-bookable:
+    patch:
+      description: Toggles the not_bookable flag for a room. Only the event owner
+        can toggle. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Room ID (UUID)
+        in: path
+        name: roomID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the updated room
+          schema:
+            $ref: '#/definitions/controllers.ToggleRoomNotBookableSuccessResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Toggle room not_bookable flag
       tags:
       - events
   /events/me:

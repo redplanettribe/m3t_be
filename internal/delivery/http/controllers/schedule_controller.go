@@ -227,6 +227,55 @@ func (c *ScheduleController) DeleteEvent(w http.ResponseWriter, r *http.Request)
 	helpers.WriteJSONSuccess(w, http.StatusOK, DeleteEventResponse{Status: "deleted"})
 }
 
+// ToggleRoomNotBookableSuccessResponse is the success response envelope for PATCH /events/{eventID}/rooms/{roomID}/not-bookable (200).
+type ToggleRoomNotBookableSuccessResponse struct {
+	Data  *domain.Room       `json:"data"`
+	Error *helpers.APIError  `json:"error"`
+}
+
+// ToggleRoomNotBookable godoc
+// @Summary Toggle room not_bookable flag
+// @Description Toggles the not_bookable flag for a room. Only the event owner can toggle. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param roomID path string true "Room ID (UUID)"
+// @Success 200 {object} controllers.ToggleRoomNotBookableSuccessResponse "data contains the updated room"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/rooms/{roomID}/not-bookable [patch]
+func (c *ScheduleController) ToggleRoomNotBookable(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	roomID := r.PathValue("roomID")
+	if eventID == "" || roomID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or roomID")
+		return
+	}
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	room, err := c.Service.ToggleRoomNotBookable(r.Context(), eventID, roomID, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or room not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, room)
+}
+
 // ListMyEvents godoc
 // @Summary List events owned by the current user
 // @Description Returns events where the authenticated user is the owner. Requires Bearer token.

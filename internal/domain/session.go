@@ -12,16 +12,18 @@ type Room struct {
 	EventID          string    `json:"event_id"`
 	Name             string    `json:"name"`
 	SessionizeRoomID int       `json:"sessionize_room_id"`
+	NotBookable      bool      `json:"not_bookable"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // NewRoom returns a new Room with the given fields. ID is typically set by the repository on create.
-func NewRoom(eventID, name string, sessionizeRoomID int, createdAt, updatedAt time.Time) *Room {
+func NewRoom(eventID, name string, sessionizeRoomID int, notBookable bool, createdAt, updatedAt time.Time) *Room {
 	return &Room{
 		EventID:          eventID,
 		Name:             name,
 		SessionizeRoomID: sessionizeRoomID,
+		NotBookable:      notBookable,
 		CreatedAt:        createdAt,
 		UpdatedAt:        updatedAt,
 	}
@@ -66,8 +68,10 @@ type SessionRepository interface {
 	CreateRoom(ctx context.Context, room *Room) error
 	CreateSession(ctx context.Context, session *Session) error
 	DeleteScheduleByEventID(ctx context.Context, eventID string) error
+	GetRoomByID(ctx context.Context, roomID string) (*Room, error)
 	ListRoomsByEventID(ctx context.Context, eventID string) ([]*Room, error)
 	ListSessionsByEventID(ctx context.Context, eventID string) ([]*Session, error)
+	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
 }
 
 // ManageScheduleService defines the business logic for managing schedule
@@ -77,4 +81,5 @@ type ManageScheduleService interface {
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
 	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
 	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
+	ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
 }

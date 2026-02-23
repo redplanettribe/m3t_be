@@ -29,6 +29,8 @@ type fakeManageScheduleService struct {
 	listEventsByOwnerErr   error
 	getEventByIDErr        error
 	deleteEventErr         error
+	toggleRoomErr          error
+	toggleRoomResult       *domain.Room
 	lastCreateEvent        *domain.Event
 	lastImportEventID      string
 	lastImportSessionizeID string
@@ -85,6 +87,13 @@ func (f *fakeManageScheduleService) DeleteEvent(ctx context.Context, eventID str
 	f.lastDeleteEventID = eventID
 	f.lastDeleteOwnerID = ownerID
 	return f.deleteEventErr
+}
+
+func (f *fakeManageScheduleService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
+	if f.toggleRoomErr != nil {
+		return nil, f.toggleRoomErr
+	}
+	return f.toggleRoomResult, nil
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -471,6 +480,115 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 				var data GetEventByIDResponse
 				require.NoError(t, json.Unmarshal(dataBytes, &data))
 				tt.checkResponse(t, data)
+			}
+			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
+				require.NotNil(t, envelope.Error, "error response must have error set")
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
+			}
+		})
+	}
+}
+
+func TestScheduleController_ToggleRoomNotBookable(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		roomID         string
+		noUserContext  bool
+		fakeErr        error
+		fakeResult     *domain.Room
+		wantStatus     int
+		wantBodySubstr string
+		checkResponse  func(t *testing.T, room *domain.Room)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-123",
+			roomID:     "room-1",
+			fakeResult: &domain.Room{ID: "room-1", EventID: "ev-123", Name: "Room A", NotBookable: true},
+			wantStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, room *domain.Room) {
+				require.NotNil(t, room)
+				assert.Equal(t, "room-1", room.ID)
+				assert.True(t, room.NotBookable)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			roomID:         "room-1",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or roomID",
+		},
+		{
+			name:           "missing roomID",
+			eventID:        "ev-123",
+			roomID:         "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or roomID",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-123",
+			roomID:        "room-1",
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			roomID:         "room-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event or room not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-123",
+			roomID:         "room-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "service error",
+			eventID:        "ev-123",
+			roomID:         "room-1",
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{toggleRoomErr: tt.fakeErr, toggleRoomResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/rooms/" + tt.roomID + "/not-bookable"
+			req := httptest.NewRequest(http.MethodPatch, path, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if tt.roomID != "" {
+				req.SetPathValue("roomID", tt.roomID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.ToggleRoomNotBookable(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code, "status code")
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
+			if tt.wantStatus == http.StatusOK && tt.checkResponse != nil {
+				require.Nil(t, envelope.Error, "success response must have error nil")
+				dataBytes, err := json.Marshal(envelope.Data)
+				require.NoError(t, err)
+				var room domain.Room
+				require.NoError(t, json.Unmarshal(dataBytes, &room))
+				tt.checkResponse(t, &room)
 			}
 			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
 				require.NotNil(t, envelope.Error, "error response must have error set")
