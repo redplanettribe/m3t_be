@@ -45,6 +45,16 @@ Table sessions {
   }
 }
 
+Table session_tags {
+  session_id uuid [not null, ref: > sessions.id]
+  tag varchar(255) [not null]
+
+  indexes {
+    (session_id, tag) [pk]
+    session_id
+  }
+}
+
 Table users {
   id uuid [pk, default: `gen_random_uuid()`]
   email varchar(255) [not null, unique]

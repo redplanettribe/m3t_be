@@ -199,6 +199,10 @@ func defaultSessionizeData() domain.SessionizeResponse {
 							StartsAt:    time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC),
 							EndsAt:      time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC),
 							RoomID:      1,
+							Categories: []domain.SessionizeCategory{
+								{Name: "Tipo de sesión", CategoryItems: []domain.SessionizeCategoryItem{{Name: "Conferencia"}}},
+								{Name: "Event tag", CategoryItems: []domain.SessionizeCategoryItem{{Name: "ai"}, {Name: "web"}}},
+							},
 						},
 					},
 				},
@@ -304,6 +308,7 @@ func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
 				assert.Equal(t, "Room A", sessionRepo.rooms[0].Name)
 				require.Len(t, sessionRepo.sessions, 1)
 				assert.Equal(t, "Talk 1", sessionRepo.sessions[0].Title)
+				assert.ElementsMatch(t, []string{"Conferencia", "ai", "web"}, sessionRepo.sessions[0].Tags)
 			},
 		},
 		{
@@ -445,7 +450,7 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 				ev, _ := er.GetByID(ctx, "ev-1")
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: ev.ID, Name: "Room A"}}
-				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []string{}}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID: "ev-1",

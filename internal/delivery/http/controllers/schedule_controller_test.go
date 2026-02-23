@@ -381,7 +381,7 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 				"ev-123": {
 					event:    &domain.Event{ID: "ev-123", Name: "Conf 2025", Slug: "conf-2025", OwnerID: "user-1"},
 					rooms:    []*domain.Room{{ID: "room-1", EventID: "ev-123", Name: "Room A"}},
-					sessions: []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1"}},
+					sessions: []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []string{}}},
 				},
 			},
 			wantStatus:     http.StatusOK,

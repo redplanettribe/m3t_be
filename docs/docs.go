@@ -681,6 +681,12 @@ const docTemplate = `{
                 "start_time": {
                     "type": "string"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "title": {
                     "type": "string"
                 },

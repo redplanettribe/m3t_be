@@ -9,6 +9,7 @@ import (
 	"multitrackticketing/internal/domain"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -102,6 +103,7 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				StartTime:           startTime,
 				EndTime:             endTime,
 				Description:         "A talk",
+				Tags:                []string{},
 				CreatedAt:           createdAt,
 				UpdatedAt:           updatedAt,
 			},
@@ -109,8 +111,37 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				mock.ExpectQuery(`INSERT INTO sessions`).
 					WithArgs("room-1", "sess-1", "Talk 1", startTime, endTime, "A talk", createdAt, updatedAt).
 					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("session-uuid-1"))
+				mock.ExpectExec(`DELETE FROM session_tags WHERE session_id`).
+					WithArgs("session-uuid-1").
+					WillReturnResult(sqlmock.NewResult(0, 0))
 			},
 			wantID:  "session-uuid-1",
+			wantErr: false,
+		},
+		{
+			name: "success with tags",
+			session: &domain.Session{
+				RoomID:              "room-1",
+				SessionizeSessionID: "sess-tags",
+				Title:               "Talk with tags",
+				StartTime:           startTime,
+				EndTime:             endTime,
+				Description:         "",
+				Tags:                []string{"ai", "web"},
+				CreatedAt:           createdAt,
+				UpdatedAt:           updatedAt,
+			},
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`INSERT INTO sessions`).
+					WithArgs("room-1", "sess-tags", "Talk with tags", startTime, endTime, "", createdAt, updatedAt).
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("session-uuid-2"))
+				mock.ExpectExec(`DELETE FROM session_tags WHERE session_id`).
+					WithArgs("session-uuid-2").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectExec(`INSERT INTO session_tags`).WithArgs("session-uuid-2", "ai").WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectExec(`INSERT INTO session_tags`).WithArgs("session-uuid-2", "web").WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantID:  "session-uuid-2",
 			wantErr: false,
 		},
 		{
@@ -122,6 +153,7 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				StartTime:           startTime,
 				EndTime:             endTime,
 				Description:         "",
+				Tags:                nil,
 				CreatedAt:           createdAt,
 				UpdatedAt:           updatedAt,
 			},
@@ -281,11 +313,12 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name    string
-		eventID string
-		mock    func(mock sqlmock.Sqlmock)
-		wantLen int
-		wantErr bool
+		name                  string
+		eventID               string
+		mock                  func(mock sqlmock.Sqlmock)
+		wantLen               int
+		wantFirstSessionTags  []string
+		wantErr               bool
 	}{
 		{
 			name:    "success one session",
@@ -296,9 +329,16 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 				mock.ExpectQuery(`SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at`).
 					WithArgs("ev-1").
 					WillReturnRows(rows)
+				tagRows := sqlmock.NewRows([]string{"session_id", "tag"}).
+					AddRow("sess-1", "ai").
+					AddRow("sess-1", "web")
+				mock.ExpectQuery(`SELECT session_id, tag FROM session_tags WHERE session_id = ANY`).
+					WithArgs(pq.Array([]string{"sess-1"})).
+					WillReturnRows(tagRows)
 			},
-			wantLen: 1,
-			wantErr: false,
+			wantLen:              1,
+			wantFirstSessionTags: []string{"ai", "web"},
+			wantErr:              false,
 		},
 		{
 			name:    "success empty",
@@ -308,7 +348,7 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 					WithArgs("ev-2").
 					WillReturnRows(sqlmock.NewRows([]string{"id", "room_id", "sessionize_session_id", "title", "start_time", "end_time", "description", "created_at", "updated_at"}))
 			},
-			wantLen: 0,
+			wantLen:  0,
 			wantErr: false,
 		},
 		{
@@ -319,7 +359,7 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 					WithArgs("ev-1").
 					WillReturnError(sql.ErrConnDone)
 			},
-			wantLen: 0,
+			wantLen:  0,
 			wantErr: true,
 		},
 	}
@@ -338,6 +378,9 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, sessions, tt.wantLen)
+			if tt.wantFirstSessionTags != nil && len(sessions) > 0 {
+				require.ElementsMatch(t, tt.wantFirstSessionTags, sessions[0].Tags)
+			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}

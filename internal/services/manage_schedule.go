@@ -70,6 +70,25 @@ func (s *manageScheduleService) GetEventByID(ctx context.Context, eventID string
 	return event, rooms, sessions, nil
 }
 
+// deriveTags collects all category item names from Sessionize categories, deduped.
+func deriveTags(categories []domain.SessionizeCategory) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, cat := range categories {
+		for _, item := range cat.CategoryItems {
+			if item.Name == "" {
+				continue
+			}
+			if _, ok := seen[item.Name]; ok {
+				continue
+			}
+			seen[item.Name] = struct{}{}
+			out = append(out, item.Name)
+		}
+	}
+	return out
+}
+
 func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
@@ -119,8 +138,9 @@ func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventI
 				if session.Description != nil {
 					desc = *session.Description
 				}
+				tags := deriveTags(session.Categories)
 				now := time.Now()
-				sess := domain.NewSession(domainRoomID, session.ID, session.Title, desc, session.StartsAt, session.EndsAt, now, now)
+				sess := domain.NewSession(domainRoomID, session.ID, session.Title, desc, session.StartsAt, session.EndsAt, tags, now, now)
 
 				if err := s.sessionRepo.CreateSession(ctx, sess); err != nil {
 					return fmt.Errorf("failed to create session %s: %w", session.Title, err)

@@ -37,12 +37,17 @@ type Session struct {
 	StartTime           time.Time `json:"start_time"`
 	EndTime             time.Time `json:"end_time"`
 	Description         string    `json:"description"`
+	Tags                []string  `json:"tags"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // NewSession returns a new Session with the given fields. ID is typically set by the repository on create.
-func NewSession(roomID, sessionizeSessionID, title, description string, startTime, endTime, createdAt, updatedAt time.Time) *Session {
+// tags may be nil or empty; the repository will store them in session_tags.
+func NewSession(roomID, sessionizeSessionID, title, description string, startTime, endTime time.Time, tags []string, createdAt, updatedAt time.Time) *Session {
+	if tags == nil {
+		tags = []string{}
+	}
 	return &Session{
 		RoomID:              roomID,
 		SessionizeSessionID: sessionizeSessionID,
@@ -50,6 +55,7 @@ func NewSession(roomID, sessionizeSessionID, title, description string, startTim
 		StartTime:           startTime,
 		EndTime:             endTime,
 		Description:         description,
+		Tags:                tags,
 		CreatedAt:           createdAt,
 		UpdatedAt:           updatedAt,
 	}

@@ -164,6 +164,10 @@ definitions:
         type: string
       start_time:
         type: string
+      tags:
+        items:
+          type: string
+        type: array
       title:
         type: string
       updated_at:

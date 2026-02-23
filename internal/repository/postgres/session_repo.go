@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"multitrackticketing/internal/domain"
+
+	"github.com/lib/pq"
 )
 
 type SessionRepository struct {
@@ -35,7 +37,19 @@ func (r *SessionRepository) CreateSession(ctx context.Context, s *domain.Session
 		SET title = EXCLUDED.title, start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, description = EXCLUDED.description, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
-	return r.DB.QueryRowContext(ctx, query, s.RoomID, s.SessionizeSessionID, s.Title, s.StartTime, s.EndTime, s.Description, s.CreatedAt, s.UpdatedAt).Scan(&s.ID)
+	if err := r.DB.QueryRowContext(ctx, query, s.RoomID, s.SessionizeSessionID, s.Title, s.StartTime, s.EndTime, s.Description, s.CreatedAt, s.UpdatedAt).Scan(&s.ID); err != nil {
+		return err
+	}
+	// Replace tags for this session (handles both new insert and ON CONFLICT update)
+	if _, err := r.DB.ExecContext(ctx, `DELETE FROM session_tags WHERE session_id = $1`, s.ID); err != nil {
+		return err
+	}
+	for _, tag := range s.Tags {
+		if _, err := r.DB.ExecContext(ctx, `INSERT INTO session_tags (session_id, tag) VALUES ($1, $2)`, s.ID, tag); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *SessionRepository) DeleteScheduleByEventID(ctx context.Context, eventID string) error {
@@ -81,12 +95,42 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 	}
 	defer rows.Close()
 	var sessions []*domain.Session
+	var sessionIDs []string
 	for rows.Next() {
 		sess := &domain.Session{}
 		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SessionizeSessionID, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
 			return nil, err
 		}
+		sess.Tags = []string{}
 		sessions = append(sessions, sess)
+		sessionIDs = append(sessionIDs, sess.ID)
 	}
-	return sessions, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(sessionIDs) == 0 {
+		return sessions, nil
+	}
+	tagRows, err := r.DB.QueryContext(ctx, `SELECT session_id, tag FROM session_tags WHERE session_id = ANY($1)`, pq.Array(sessionIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer tagRows.Close()
+	tagsBySession := make(map[string][]string)
+	for tagRows.Next() {
+		var sessionID, tag string
+		if err := tagRows.Scan(&sessionID, &tag); err != nil {
+			return nil, err
+		}
+		tagsBySession[sessionID] = append(tagsBySession[sessionID], tag)
+	}
+	if err := tagRows.Err(); err != nil {
+		return nil, err
+	}
+	for _, sess := range sessions {
+		if t := tagsBySession[sess.ID]; t != nil {
+			sess.Tags = t
+		}
+	}
+	return sessions, nil
 }
