@@ -26,6 +26,9 @@ func NewRouter(
 	mux.HandleFunc("DELETE /events/{eventID}", requireAuth(scheduleController.DeleteEvent))
 	mux.HandleFunc("PATCH /events/{eventID}/rooms/{roomID}/not-bookable", requireAuth(scheduleController.ToggleRoomNotBookable))
 	mux.HandleFunc("POST /events/{eventID}/import/sessionize/{sessionizeID}", requireAuth(scheduleController.ImportSessionize))
+	mux.HandleFunc("POST /events/{eventID}/team-members", requireAuth(scheduleController.AddEventTeamMember))
+	mux.HandleFunc("GET /events/{eventID}/team-members", requireAuth(scheduleController.ListEventTeamMembers))
+	mux.HandleFunc("DELETE /events/{eventID}/team-members/{userID}", requireAuth(scheduleController.RemoveEventTeamMember))
 
 	// Auth (handled by user controller)
 	mux.HandleFunc("POST /auth/signup", userController.SignUp)

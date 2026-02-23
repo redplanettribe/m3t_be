@@ -1,50 +1,56 @@
 {
   "version": "1.0.0",
-  "darkMode": true,
+  "darkMode": false,
   "gridEnabling": false,
   "detailLevel": "All",
   "tablePositions": [
     {
       "name": "events",
       "schemaName": "public",
-      "x": 0,
-      "y": 50
+      "x": 488,
+      "y": 16
     },
     {
       "name": "rooms",
       "schemaName": "public",
-      "x": 279.2392578125,
-      "y": 50
+      "x": 984,
+      "y": 16
     },
     {
       "name": "sessions",
       "schemaName": "public",
-      "x": 574.93212890625,
-      "y": 50
+      "x": 1472,
+      "y": 16
     },
     {
       "name": "session_tags",
       "schemaName": "public",
-      "x": 902.5576171875,
-      "y": 50
+      "x": 2000,
+      "y": 16
     },
     {
       "name": "users",
       "schemaName": "public",
-      "x": 0,
-      "y": 324
+      "x": 16,
+      "y": 16
+    },
+    {
+      "name": "event_team_members",
+      "schemaName": "public",
+      "x": 984,
+      "y": 312
     },
     {
       "name": "roles",
       "schemaName": "public",
-      "x": 279.2392578125,
-      "y": 356
+      "x": 16,
+      "y": 344
     },
     {
       "name": "user_roles",
       "schemaName": "public",
-      "x": 574.93212890625,
-      "y": 420
+      "x": 488,
+      "y": 280
     }
   ],
   "tableGroupCollapseStates": [],
@@ -106,6 +112,36 @@
         "session_id"
       ],
       "secondTableName": "session_tags",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "events",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "event_id"
+      ],
+      "secondTableName": "event_team_members",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "user_id"
+      ],
+      "secondTableName": "event_team_members",
       "secondSchemaName": "public",
       "secondRelation": "*",
       "checkPoints": []

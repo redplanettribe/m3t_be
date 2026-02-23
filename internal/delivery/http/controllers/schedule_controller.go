@@ -4,12 +4,20 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/delivery/http/middleware"
 	"multitrackticketing/internal/domain"
 )
+
+// uuidRegex matches a canonical UUID string (8-4-4-4-12 hex).
+var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// emailRegex matches a simple email format (local@domain with at least one dot in domain).
+var emailRegex = regexp.MustCompile(`^[^@]+@[^@]+\.[^@]+$`)
 
 // CreateEventRequest is the request body for POST /events. Only name and slug are accepted.
 type CreateEventRequest struct {
@@ -302,4 +310,187 @@ func (c *ScheduleController) ListMyEvents(w http.ResponseWriter, r *http.Request
 		events = []*domain.Event{}
 	}
 	helpers.WriteJSONSuccess(w, http.StatusOK, events)
+}
+
+// AddEventTeamMemberRequest is the request body for POST /events/{eventID}/team-members.
+type AddEventTeamMemberRequest struct {
+	Email string `json:"email"`
+}
+
+// Validate implements Validator.
+func (a AddEventTeamMemberRequest) Validate() []string {
+	var errs []string
+	if a.Email == "" {
+		errs = append(errs, "email is required")
+	} else if !emailRegex.MatchString(strings.TrimSpace(a.Email)) {
+		errs = append(errs, "email must be a valid email address")
+	}
+	return errs
+}
+
+// AddEventTeamMemberSuccessResponse is the success response envelope for POST /events/{eventID}/team-members (201).
+type AddEventTeamMemberSuccessResponse struct {
+	Data  *domain.EventTeamMember `json:"data"`
+	Error *helpers.APIError        `json:"error"`
+}
+
+// AddEventTeamMember godoc
+// @Summary Add a team member to an event
+// @Description Add a user as a team member of the event by email. Only the event owner can add. Returns 404 with a message if no user exists with that email. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body AddEventTeamMemberRequest true "Email of the user to add"
+// @Success 201 {object} controllers.AddEventTeamMemberSuccessResponse "data contains the added team member"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found (no user with that email)"
+// @Failure 409 {object} helpers.APIResponse "error.code: conflict (already member or invalid)"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/team-members [post]
+func (c *ScheduleController) AddEventTeamMember(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	var req AddEventTeamMemberRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	member, err := c.Service.AddEventTeamMemberByEmail(r.Context(), eventID, req.Email, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrUserNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "no user with that email")
+			return
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		if errors.Is(err, domain.ErrAlreadyMember) || errors.Is(err, domain.ErrInvalidInput) {
+			helpers.WriteJSONError(w, http.StatusConflict, helpers.ErrCodeConflict, err.Error())
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusCreated, member)
+}
+
+// ListEventTeamMembersSuccessResponse is the success response envelope for GET /events/{eventID}/team-members (200).
+type ListEventTeamMembersSuccessResponse struct {
+	Data  []*domain.EventTeamMember `json:"data"`
+	Error *helpers.APIError         `json:"error"`
+}
+
+// ListEventTeamMembers godoc
+// @Summary List team members of an event
+// @Description Returns the list of team members for the event. Only the event owner can list. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} controllers.ListEventTeamMembersSuccessResponse "data is an array of team members"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/team-members [get]
+func (c *ScheduleController) ListEventTeamMembers(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	callerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	members, err := c.Service.ListEventTeamMembers(r.Context(), eventID, callerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if members == nil {
+		members = []*domain.EventTeamMember{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, members)
+}
+
+// RemoveEventTeamMemberResponse is the data payload for DELETE /events/{eventID}/team-members/{userID} (200).
+type RemoveEventTeamMemberResponse struct {
+	Status string `json:"status"`
+}
+
+// RemoveEventTeamMemberSuccessResponse is the success response envelope for DELETE /events/{eventID}/team-members/{userID} (200).
+type RemoveEventTeamMemberSuccessResponse struct {
+	Data  RemoveEventTeamMemberResponse `json:"data"`
+	Error *helpers.APIError            `json:"error"`
+}
+
+// RemoveEventTeamMember godoc
+// @Summary Remove a team member from an event
+// @Description Remove a user from the event's team members. Only the event owner can remove. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param userID path string true "User ID (UUID) of the team member to remove"
+// @Success 200 {object} controllers.RemoveEventTeamMemberSuccessResponse "data contains status"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/team-members/{userID} [delete]
+func (c *ScheduleController) RemoveEventTeamMember(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	userID := r.PathValue("userID")
+	if eventID == "" || userID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or userID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	err := c.Service.RemoveEventTeamMember(r.Context(), eventID, userID, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or team member not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, RemoveEventTeamMemberResponse{Status: "removed"})
 }

@@ -33,10 +33,13 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.
 		WHERE email = $1
 	`
 	u := &domain.User{}
-	err := r.DB.QueryRowContext(ctx, query, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &u.Name, &u.LastName, &u.CreatedAt, &u.UpdatedAt)
+	var name, lastName sql.NullString
+	err := r.DB.QueryRowContext(ctx, query, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &name, &lastName, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+	u.Name = name.String
+	u.LastName = lastName.String
 	return u, nil
 }
 
@@ -47,10 +50,13 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, 
 		WHERE id = $1
 	`
 	u := &domain.User{}
-	err := r.DB.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &u.Name, &u.LastName, &u.CreatedAt, &u.UpdatedAt)
+	var name, lastName sql.NullString
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Salt, &name, &lastName, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+	u.Name = name.String
+	u.LastName = lastName.String
 	return u, nil
 }
 

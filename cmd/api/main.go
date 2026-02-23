@@ -54,10 +54,11 @@ func main() {
 	// 3. Init Layers
 	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
+	eventTeamMemberRepo := postgres.NewEventTeamMemberRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	roleRepo := postgres.NewRoleRepository(db)
 	sessionizeFetcher := sessionize.NewHTTPFetcher(nil)
-	manageScheduleService := services.NewManageScheduleService(eventRepo, sessionRepo, sessionizeFetcher, 10*time.Second)
+	manageScheduleService := services.NewManageScheduleService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, sessionizeFetcher, 10*time.Second)
 	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
 
 	jwtSecret := cfg.JWTSecret

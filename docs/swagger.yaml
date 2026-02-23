@@ -1,5 +1,17 @@
 basePath: /
 definitions:
+  controllers.AddEventTeamMemberRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  controllers.AddEventTeamMemberSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.EventTeamMember'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.CreateEventRequest:
     properties:
       name:
@@ -65,6 +77,15 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.ListEventTeamMembersSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/domain.EventTeamMember'
+        type: array
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.ListMyEventsSuccessResponse:
     properties:
       data:
@@ -94,6 +115,18 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/controllers.LoginResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.RemoveEventTeamMemberResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  controllers.RemoveEventTeamMemberSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.RemoveEventTeamMemberResponse'
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
@@ -155,6 +188,19 @@ definitions:
       slug:
         type: string
       updated_at:
+        type: string
+    type: object
+  domain.EventTeamMember:
+    properties:
+      email:
+        type: string
+      event_id:
+        type: string
+      last_name:
+        type: string
+      name:
+        type: string
+      user_id:
         type: string
     type: object
   domain.Room:
@@ -486,6 +532,141 @@ paths:
       security:
       - BearerAuth: []
       summary: Toggle room not_bookable flag
+      tags:
+      - events
+  /events/{eventID}/team-members:
+    get:
+      description: Returns the list of team members for the event. Only the event
+        owner can list. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data is an array of team members
+          schema:
+            $ref: '#/definitions/controllers.ListEventTeamMembersSuccessResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List team members of an event
+      tags:
+      - events
+    post:
+      consumes:
+      - application/json
+      description: Add a user as a team member of the event by email. Only the event
+        owner can add. Returns 404 with a message if no user exists with that email.
+        Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Email of the user to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.AddEventTeamMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: data contains the added team member
+          schema:
+            $ref: '#/definitions/controllers.AddEventTeamMemberSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found (no user with that email)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "409":
+          description: 'error.code: conflict (already member or invalid)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a team member to an event
+      tags:
+      - events
+  /events/{eventID}/team-members/{userID}:
+    delete:
+      description: Remove a user from the event's team members. Only the event owner
+        can remove. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: User ID (UUID) of the team member to remove
+        in: path
+        name: userID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains status
+          schema:
+            $ref: '#/definitions/controllers.RemoveEventTeamMemberSuccessResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a team member from an event
       tags:
       - events
   /events/me:

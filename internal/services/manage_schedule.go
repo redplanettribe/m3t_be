@@ -2,26 +2,32 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"multitrackticketing/internal/domain"
 )
 
 type manageScheduleService struct {
-	eventRepo      domain.EventRepository
-	sessionRepo    domain.SessionRepository
-	sessionize     domain.SessionizeFetcher
-	contextTimeout time.Duration
+	eventRepo           domain.EventRepository
+	sessionRepo         domain.SessionRepository
+	eventTeamMemberRepo domain.EventTeamMemberRepository
+	userRepo            domain.UserRepository
+	sessionize          domain.SessionizeFetcher
+	contextTimeout      time.Duration
 }
 
-func NewManageScheduleService(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, sessionize domain.SessionizeFetcher, timeout time.Duration) domain.ManageScheduleService {
+func NewManageScheduleService(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, eventTeamMemberRepo domain.EventTeamMemberRepository, userRepo domain.UserRepository, sessionize domain.SessionizeFetcher, timeout time.Duration) domain.ManageScheduleService {
 	return &manageScheduleService{
-		eventRepo:      eventRepo,
-		sessionRepo:    sessionRepo,
-		sessionize:     sessionize,
-		contextTimeout: timeout,
+		eventRepo:           eventRepo,
+		sessionRepo:         sessionRepo,
+		eventTeamMemberRepo: eventTeamMemberRepo,
+		userRepo:            userRepo,
+		sessionize:          sessionize,
+		contextTimeout:      timeout,
 	}
 }
 
@@ -212,4 +218,107 @@ func (s *manageScheduleService) ToggleRoomNotBookable(ctx context.Context, event
 		return nil, fmt.Errorf("set room not_bookable: %w", err)
 	}
 	return updated, nil
+}
+
+func (s *manageScheduleService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	if userIDToAdd == event.OwnerID {
+		return domain.ErrInvalidInput
+	}
+	if err := s.eventTeamMemberRepo.Add(ctx, eventID, userIDToAdd); err != nil {
+		if errors.Is(err, domain.ErrAlreadyMember) {
+			return domain.ErrAlreadyMember
+		}
+		return fmt.Errorf("add team member: %w", err)
+	}
+	return nil
+}
+
+func (s *manageScheduleService) AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*domain.EventTeamMember, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, domain.ErrUserNotFound) {
+			return nil, domain.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user by email: %w", err)
+	}
+	if user == nil {
+		return nil, domain.ErrUserNotFound
+	}
+	if err := s.AddEventTeamMember(ctx, eventID, user.ID, ownerID); err != nil {
+		return nil, err
+	}
+	return &domain.EventTeamMember{
+		EventID:  eventID,
+		UserID:   user.ID,
+		Name:     user.Name,
+		LastName: user.LastName,
+		Email:    user.Email,
+	}, nil
+}
+
+func (s *manageScheduleService) ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*domain.EventTeamMember, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != callerID {
+		return nil, domain.ErrForbidden
+	}
+	members, err := s.eventTeamMemberRepo.ListByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list team members: %w", err)
+	}
+	if members == nil {
+		members = []*domain.EventTeamMember{}
+	}
+	return members, nil
+}
+
+func (s *manageScheduleService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	if err := s.eventTeamMemberRepo.Remove(ctx, eventID, userIDToRemove); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("remove team member: %w", err)
+	}
+	return nil
 }

@@ -31,11 +31,25 @@ type fakeManageScheduleService struct {
 	deleteEventErr         error
 	toggleRoomErr          error
 	toggleRoomResult       *domain.Room
-	lastCreateEvent        *domain.Event
-	lastImportEventID      string
-	lastImportSessionizeID string
-	lastDeleteEventID      string
-	lastDeleteOwnerID      string
+	addTeamMemberErr         error
+	addTeamMemberByEmailErr  error
+	addTeamMemberByEmailResult *domain.EventTeamMember
+	listTeamMembersErr       error
+	listTeamMembersResult    []*domain.EventTeamMember
+	removeTeamMemberErr      error
+	lastCreateEvent          *domain.Event
+	lastImportEventID        string
+	lastImportSessionizeID   string
+	lastDeleteEventID        string
+	lastDeleteOwnerID        string
+	lastAddTeamMemberEventID string
+	lastAddTeamMemberEmail   string
+	lastAddTeamMemberOwnerID string
+	lastListTeamMembersEventID   string
+	lastListTeamMembersCallerID  string
+	lastRemoveTeamMemberEventID  string
+	lastRemoveTeamMemberUserID   string
+	lastRemoveTeamMemberOwnerID  string
 	eventsByOwner          map[string][]*domain.Event // ownerID -> events to return
 	eventByID              map[string]struct {       // eventID -> event, rooms, sessions to return
 		event    *domain.Event
@@ -94,6 +108,44 @@ func (f *fakeManageScheduleService) ToggleRoomNotBookable(ctx context.Context, e
 		return nil, f.toggleRoomErr
 	}
 	return f.toggleRoomResult, nil
+}
+
+func (f *fakeManageScheduleService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
+	f.lastAddTeamMemberEventID = eventID
+	f.lastAddTeamMemberOwnerID = ownerID
+	return f.addTeamMemberErr
+}
+
+func (f *fakeManageScheduleService) AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*domain.EventTeamMember, error) {
+	f.lastAddTeamMemberEventID = eventID
+	f.lastAddTeamMemberEmail = email
+	f.lastAddTeamMemberOwnerID = ownerID
+	if f.addTeamMemberByEmailErr != nil {
+		return nil, f.addTeamMemberByEmailErr
+	}
+	if f.addTeamMemberByEmailResult != nil {
+		return f.addTeamMemberByEmailResult, nil
+	}
+	return &domain.EventTeamMember{EventID: eventID, UserID: "resolved-user-id"}, nil
+}
+
+func (f *fakeManageScheduleService) ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*domain.EventTeamMember, error) {
+	f.lastListTeamMembersEventID = eventID
+	f.lastListTeamMembersCallerID = callerID
+	if f.listTeamMembersErr != nil {
+		return nil, f.listTeamMembersErr
+	}
+	if f.listTeamMembersResult != nil {
+		return f.listTeamMembersResult, nil
+	}
+	return []*domain.EventTeamMember{}, nil
+}
+
+func (f *fakeManageScheduleService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
+	f.lastRemoveTeamMemberEventID = eventID
+	f.lastRemoveTeamMemberUserID = userIDToRemove
+	f.lastRemoveTeamMemberOwnerID = ownerID
+	return f.removeTeamMemberErr
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -681,6 +733,268 @@ func TestScheduleController_DeleteEvent(t *testing.T) {
 			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
 				require.NotNil(t, envelope.Error, "error response must have error set")
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
+			}
+		})
+	}
+}
+
+func TestScheduleController_AddEventTeamMember(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		body           string
+		fakeErr        error
+		fakeResult     *domain.EventTeamMember
+		wantStatus     int
+		wantBodySubstr string
+		noUserContext  bool
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			body:       `{"email":"teammate@example.com"}`,
+			fakeResult: &domain.EventTeamMember{EventID: "ev-1", UserID: "user-456"},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			body:           `{"email":"teammate@example.com"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:           "missing email",
+			eventID:        "ev-1",
+			body:           `{}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "email",
+		},
+		{
+			name:           "invalid email format",
+			eventID:        "ev-1",
+			body:           `{"email":"not-an-email"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "email",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-1",
+			body:          `{"email":"teammate@example.com"}`,
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+		},
+		{
+			name:           "no user with that email",
+			eventID:        "ev-1",
+			body:           `{"email":"nobody@example.com"}`,
+			fakeErr:        domain.ErrUserNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "no user with that email",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-1",
+			body:           `{"email":"teammate@example.com"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			body:           `{"email":"teammate@example.com"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+		},
+		{
+			name:           "conflict already member",
+			eventID:        "ev-1",
+			body:           `{"email":"teammate@example.com"}`,
+			fakeErr:        domain.ErrAlreadyMember,
+			wantStatus:     http.StatusConflict,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{addTeamMemberByEmailErr: tt.fakeErr, addTeamMemberByEmailResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			req := httptest.NewRequest(http.MethodPost, "http://test/events/"+tt.eventID+"/team-members", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.AddEventTeamMember(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusCreated {
+				require.Nil(t, envelope.Error)
+				assert.Equal(t, tt.eventID, fake.lastAddTeamMemberEventID)
+				assert.Equal(t, "user-123", fake.lastAddTeamMemberOwnerID)
+				if tt.body != "" {
+					assert.Contains(t, fake.lastAddTeamMemberEmail, "teammate@example.com")
+				}
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_ListEventTeamMembers(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		fakeErr        error
+		fakeResult     []*domain.EventTeamMember
+		wantStatus     int
+		wantBodySubstr string
+		noUserContext  bool
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			fakeResult: []*domain.EventTeamMember{{EventID: "ev-1", UserID: "user-a"}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-1",
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{listTeamMembersErr: tt.fakeErr, listTeamMembersResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			req := httptest.NewRequest(http.MethodGet, "http://test/events/"+tt.eventID+"/team-members", nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.ListEventTeamMembers(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK {
+				require.Nil(t, envelope.Error)
+				assert.Equal(t, tt.eventID, fake.lastListTeamMembersEventID)
+				assert.Equal(t, "user-123", fake.lastListTeamMembersCallerID)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_RemoveEventTeamMember(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		userID         string
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		noUserContext  bool
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			userID:     "user-2",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			userID:         "user-2",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-1",
+			userID:        "user-2",
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-1",
+			userID:         "user-2",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			userID:         "user-2",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{removeTeamMemberErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/team-members/" + tt.userID
+			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if tt.userID != "" {
+				req.SetPathValue("userID", tt.userID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.RemoveEventTeamMember(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK {
+				require.Nil(t, envelope.Error)
+				assert.Equal(t, tt.eventID, fake.lastRemoveTeamMemberEventID)
+				assert.Equal(t, tt.userID, fake.lastRemoveTeamMemberUserID)
+				assert.Equal(t, "user-123", fake.lastRemoveTeamMemberOwnerID)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
 			}
 		})
 	}

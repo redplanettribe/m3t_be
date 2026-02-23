@@ -82,4 +82,8 @@ type ManageScheduleService interface {
 	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
 	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
 	ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
+	AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error
+	AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*EventTeamMember, error)
+	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)
+	RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error
 }

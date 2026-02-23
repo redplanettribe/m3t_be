@@ -67,6 +67,17 @@ Table users {
   updated_at timestamptz [default: `now()`]
 }
 
+Table event_team_members {
+  event_id uuid [not null, ref: > events.id]
+  user_id uuid [not null, ref: > users.id]
+
+  indexes {
+    (event_id, user_id) [pk]
+    event_id
+    user_id
+  }
+}
+
 Table roles {
   id uuid [pk, default: `gen_random_uuid()`]
   code varchar(64) [not null, unique]
