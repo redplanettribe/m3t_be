@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -273,6 +274,74 @@ func TestEventRepository_ListByOwnerID(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tt.want, got)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestEventRepository_Delete(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name       string
+		id         string
+		mock       func(mock sqlmock.Sqlmock)
+		wantErr    bool
+		isNotFound bool
+	}{
+		{
+			name: "success",
+			id:   "ev-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM events WHERE id = \$1`).
+					WithArgs("ev-1").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr:     false,
+			isNotFound: false,
+		},
+		{
+			name: "not found",
+			id:   "ev-missing",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM events WHERE id = \$1`).
+					WithArgs("ev-missing").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+			},
+			wantErr:     true,
+			isNotFound: true,
+		},
+		{
+			name: "db error",
+			id:   "ev-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM events WHERE id = \$1`).
+					WithArgs("ev-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr:     true,
+			isNotFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			tt.mock(mock)
+			repo := NewEventRepository(db)
+			err = repo.Delete(ctx, tt.id)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.isNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				require.NoError(t, mock.ExpectationsWereMet())
+				return
+			}
+			require.NoError(t, err)
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}

@@ -176,6 +176,57 @@ type ListMyEventsSuccessResponse struct {
 	Error *helpers.APIError `json:"error"`
 }
 
+// DeleteEventResponse is the data payload for DELETE /events/{eventID} (200).
+type DeleteEventResponse struct {
+	Status string `json:"status"`
+}
+
+// DeleteEventSuccessResponse is the success response envelope for DELETE /events/{eventID} (200).
+type DeleteEventSuccessResponse struct {
+	Data  DeleteEventResponse `json:"data"`
+	Error *helpers.APIError   `json:"error"`
+}
+
+// DeleteEvent godoc
+// @Summary Delete an event
+// @Description Delete an event and all its associated data (rooms, sessions). Only the event owner can delete. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} controllers.DeleteEventSuccessResponse "data contains status"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID} [delete]
+func (c *ScheduleController) DeleteEvent(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	if err := c.Service.DeleteEvent(r.Context(), eventID, userID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, DeleteEventResponse{Status: "deleted"})
+}
+
 // ListMyEvents godoc
 // @Summary List events owned by the current user
 // @Description Returns events where the authenticated user is the owner. Requires Bearer token.

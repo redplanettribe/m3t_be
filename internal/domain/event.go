@@ -9,6 +9,9 @@ import (
 // ErrNotFound is returned when a requested entity is not found (e.g. event by ID).
 var ErrNotFound = errors.New("not found")
 
+// ErrForbidden is returned when the user is not allowed to perform the action (e.g. not the event owner).
+var ErrForbidden = errors.New("forbidden")
+
 // Event represents a conference event
 // swagger:model Event
 type Event struct {
@@ -37,4 +40,5 @@ type EventRepository interface {
 	GetByID(ctx context.Context, id string) (*Event, error)
 	GetBySlug(ctx context.Context, slug string) (*Event, error)
 	ListByOwnerID(ctx context.Context, ownerID string) ([]*Event, error)
+	Delete(ctx context.Context, id string) error
 }

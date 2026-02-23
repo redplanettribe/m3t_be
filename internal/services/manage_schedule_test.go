@@ -72,6 +72,16 @@ func (f *fakeEventRepo) ListByOwnerID(ctx context.Context, ownerID string) ([]*d
 	return out, nil
 }
 
+func (f *fakeEventRepo) Delete(ctx context.Context, id string) error {
+	e, ok := f.byID[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	delete(f.byID, id)
+	delete(f.bySlug, e.Slug)
+	return nil
+}
+
 // fakeSessionRepo is an in-memory SessionRepository for tests.
 type fakeSessionRepo struct {
 	rooms    []*domain.Room
@@ -511,6 +521,80 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 			}
 			require.NoError(t, err)
 			tt.assert(t, event, rooms, sessions)
+		})
+	}
+}
+
+func TestManageScheduleService_DeleteEvent(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name         string
+		setup        func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		eventID      string
+		ownerID      string
+		wantErr      bool
+		wantNotFound bool
+		wantForbidden bool
+		assertDeleted bool
+	}{
+		{
+			name: "success",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			ownerID:       "user-1",
+			wantErr:       false,
+			assertDeleted: true,
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-missing",
+			ownerID:       "user-1",
+			wantErr:       true,
+			wantNotFound:  true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			ownerID:       "user-2",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewManageScheduleService(eventRepo, sessionRepo, fetcher, timeout)
+			err := svc.DeleteEvent(ctx, tt.eventID, tt.ownerID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.assertDeleted {
+				_, err := eventRepo.GetByID(ctx, tt.eventID)
+				require.True(t, errors.Is(err, domain.ErrNotFound), "event should be deleted")
+			}
 		})
 	}
 }

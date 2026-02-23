@@ -23,6 +23,7 @@ func NewRouter(
 	mux.HandleFunc("GET /events/me", requireAuth(scheduleController.ListMyEvents))
 	mux.HandleFunc("GET /events/{eventID}", requireAuth(scheduleController.GetEventByID))
 	mux.HandleFunc("POST /events", requireAuth(scheduleController.CreateEvent))
+	mux.HandleFunc("DELETE /events/{eventID}", requireAuth(scheduleController.DeleteEvent))
 	mux.HandleFunc("POST /events/{eventID}/import/sessionize/{sessionizeID}", requireAuth(scheduleController.ImportSessionize))
 
 	// Auth (handled by user controller)

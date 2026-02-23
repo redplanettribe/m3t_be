@@ -14,6 +14,18 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.DeleteEventResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  controllers.DeleteEventSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.DeleteEventResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.GetEventByIDResponse:
     properties:
       event:
@@ -311,6 +323,43 @@ paths:
       tags:
       - events
   /events/{eventID}:
+    delete:
+      description: Delete an event and all its associated data (rooms, sessions).
+        Only the event owner can delete. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains status
+          schema:
+            $ref: '#/definitions/controllers.DeleteEventSuccessResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an event
+      tags:
+      - events
     get:
       description: Returns the event, its rooms, and all sessions for that event.
         Requires authentication.

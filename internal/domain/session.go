@@ -76,4 +76,5 @@ type ManageScheduleService interface {
 	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
 	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
+	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
 }

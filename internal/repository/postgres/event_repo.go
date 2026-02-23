@@ -80,3 +80,16 @@ func (r *eventRepository) ListByOwnerID(ctx context.Context, ownerID string) ([]
 	}
 	return events, rows.Err()
 }
+
+func (r *eventRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM events WHERE id = $1`
+	result, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}

@@ -157,3 +157,26 @@ func (s *manageScheduleService) ListEventsByOwner(ctx context.Context, ownerID s
 	defer cancel()
 	return s.eventRepo.ListByOwnerID(ctx, ownerID)
 }
+
+func (s *manageScheduleService) DeleteEvent(ctx context.Context, eventID string, ownerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	if err := s.eventRepo.Delete(ctx, eventID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("delete event: %w", err)
+	}
+	return nil
+}

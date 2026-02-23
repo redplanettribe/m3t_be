@@ -28,9 +28,12 @@ type fakeManageScheduleService struct {
 	importSessionizeErr    error
 	listEventsByOwnerErr   error
 	getEventByIDErr        error
+	deleteEventErr         error
 	lastCreateEvent        *domain.Event
 	lastImportEventID      string
 	lastImportSessionizeID string
+	lastDeleteEventID      string
+	lastDeleteOwnerID      string
 	eventsByOwner          map[string][]*domain.Event // ownerID -> events to return
 	eventByID              map[string]struct {       // eventID -> event, rooms, sessions to return
 		event    *domain.Event
@@ -76,6 +79,12 @@ func (f *fakeManageScheduleService) GetEventByID(ctx context.Context, eventID st
 		}
 	}
 	return nil, nil, nil, domain.ErrNotFound
+}
+
+func (f *fakeManageScheduleService) DeleteEvent(ctx context.Context, eventID string, ownerID string) error {
+	f.lastDeleteEventID = eventID
+	f.lastDeleteOwnerID = ownerID
+	return f.deleteEventErr
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -462,6 +471,94 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 				var data GetEventByIDResponse
 				require.NoError(t, json.Unmarshal(dataBytes, &data))
 				tt.checkResponse(t, data)
+			}
+			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
+				require.NotNil(t, envelope.Error, "error response must have error set")
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
+			}
+		})
+	}
+}
+
+func TestScheduleController_DeleteEvent(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeManageScheduleService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-123",
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+				assert.Equal(t, "ev-123", fake.lastDeleteEventID)
+				assert.Equal(t, "user-123", fake.lastDeleteOwnerID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-123",
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden not owner",
+			eventID:        "ev-123",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "service error",
+			eventID:        "ev-123",
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{deleteEventErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			req := httptest.NewRequest(http.MethodDelete, "http://test/events/"+tt.eventID, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.DeleteEvent(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code, "status code")
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				require.Nil(t, envelope.Error, "success response must have error nil")
+				tt.checkCall(t, fake)
+				var data DeleteEventResponse
+				dataBytes, _ := json.Marshal(envelope.Data)
+				require.NoError(t, json.Unmarshal(dataBytes, &data))
+				assert.Equal(t, "deleted", data.Status)
 			}
 			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
 				require.NotNil(t, envelope.Error, "error response must have error set")
