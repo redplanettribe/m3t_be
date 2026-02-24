@@ -69,25 +69,15 @@ type LoginResponse struct {
 	User      *domain.User `json:"user"`
 }
 
-// UpdateUserRequest is the request body for PATCH /users/me. All fields are optional.
+// UpdateUserRequest is the request body for PATCH /users/me. All fields are optional. Email cannot be updated.
 type UpdateUserRequest struct {
 	Name     *string `json:"name"`
 	LastName *string `json:"last_name"`
-	Email    *string `json:"email"`
 }
 
 // Validate implements Validator.
 func (u UpdateUserRequest) Validate() []string {
-	var errs []string
-	if u.Email != nil {
-		email := strings.TrimSpace(strings.ToLower(*u.Email))
-		if email == "" {
-			errs = append(errs, "email cannot be empty")
-		} else if !emailRegexp.MatchString(email) {
-			errs = append(errs, "invalid email format")
-		}
-	}
-	return errs
+	return nil
 }
 
 // LoginSuccessResponse is the success response envelope for POST /auth/login/verify (200).
@@ -220,12 +210,12 @@ func (c *UserController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 // UpdateMe godoc
 // @Summary Update current user
-// @Description Update the authenticated user's profile. Accepts optional name, last_name, and/or email. Email must be unique. Requires Bearer token.
+// @Description Update the authenticated user's profile. Accepts optional name and/or last_name only; email cannot be updated. Requires Bearer token.
 // @Tags users
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body UpdateUserRequest true "Fields to update (name, last_name, and/or email, all optional)"
+// @Param body body UpdateUserRequest true "Fields to update (name and/or last_name, both optional)"
 // @Success 200 {object} controllers.UpdateUserSuccessResponse "data contains the updated user"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
@@ -258,9 +248,6 @@ func (c *UserController) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.LastName != nil {
 		user.LastName = strings.TrimSpace(*req.LastName)
-	}
-	if req.Email != nil {
-		user.Email = strings.TrimSpace(strings.ToLower(*req.Email))
 	}
 	if err := c.Service.Update(r.Context(), user); err != nil {
 		if errors.Is(err, domain.ErrDuplicateEmail) {

@@ -687,7 +687,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update the authenticated user's profile. Accepts optional name, last_name, and/or email. Email must be unique. Requires Bearer token.",
+                "description": "Update the authenticated user's profile. Accepts optional name and/or last_name only; email cannot be updated. Requires Bearer token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -700,7 +700,7 @@ const docTemplate = `{
                 "summary": "Update current user",
                 "parameters": [
                     {
-                        "description": "Fields to update (name, last_name, and/or email, all optional)",
+                        "description": "Fields to update (name and/or last_name, both optional)",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -966,9 +966,6 @@ const docTemplate = `{
         "controllers.UpdateUserRequest": {
             "type": "object",
             "properties": {
-                "email": {
-                    "type": "string"
-                },
                 "last_name": {
                     "type": "string"
                 },
