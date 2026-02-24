@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -42,7 +44,32 @@ func (s *manageScheduleService) CreateEvent(ctx context.Context, event *domain.E
 	event.CreatedAt = time.Now()
 	event.UpdatedAt = time.Now()
 
+	if event.EventCode == "" {
+		code, err := generateEventCode()
+		if err != nil {
+			return fmt.Errorf("generate event code: %w", err)
+		}
+		event.EventCode = code
+	}
+
 	return s.eventRepo.Create(ctx, event)
+}
+
+const eventCodeLength = 4
+
+var eventCodeAlphabet = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
+func generateEventCode() (string, error) {
+	b := make([]rune, eventCodeLength)
+	max := big.NewInt(int64(len(eventCodeAlphabet)))
+	for i := 0; i < eventCodeLength; i++ {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		b[i] = eventCodeAlphabet[n.Int64()]
+	}
+	return string(b), nil
 }
 
 func (s *manageScheduleService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {

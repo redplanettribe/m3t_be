@@ -215,7 +215,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated. The authenticated user becomes the event owner.",
+                "description": "Create a new conference event. Only name is accepted in the body; id, event_code and timestamps are server-generated. The authenticated user becomes the event owner.",
                 "consumes": [
                     "application/json"
                 ],
@@ -228,7 +228,7 @@ const docTemplate = `{
                 "summary": "Create a new event",
                 "parameters": [
                     {
-                        "description": "Event data (name and slug only)",
+                        "description": "Event data (name only)",
                         "name": "event",
                         "in": "body",
                         "required": true,
@@ -870,9 +870,6 @@ const docTemplate = `{
             "properties": {
                 "name": {
                     "type": "string"
-                },
-                "slug": {
-                    "type": "string"
                 }
             }
         },
@@ -1122,6 +1119,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "event_code": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -1129,9 +1129,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "owner_id": {
-                    "type": "string"
-                },
-                "slug": {
                     "type": "string"
                 },
                 "updated_at": {

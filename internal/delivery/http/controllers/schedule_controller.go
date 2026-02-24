@@ -19,10 +19,9 @@ var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 // emailRegex matches a simple email format (local@domain with at least one dot in domain).
 var emailRegex = regexp.MustCompile(`^[^@]+@[^@]+\.[^@]+$`)
 
-// CreateEventRequest is the request body for POST /events. Only name and slug are accepted.
+// CreateEventRequest is the request body for POST /events. Only name is accepted.
 type CreateEventRequest struct {
 	Name string `json:"name"`
-	Slug string `json:"slug"`
 }
 
 // Validate implements Validator. Returns error messages for required and format rules.
@@ -30,9 +29,6 @@ func (c CreateEventRequest) Validate() []string {
 	var errs []string
 	if c.Name == "" {
 		errs = append(errs, "name is required")
-	}
-	if c.Slug == "" {
-		errs = append(errs, "slug is required")
 	}
 	return errs
 }
@@ -57,12 +53,12 @@ func NewScheduleController(logger *slog.Logger, svc domain.ManageScheduleService
 
 // CreateEvent godoc
 // @Summary Create a new event
-// @Description Create a new conference event. Only name and slug are accepted in the body; id and timestamps are server-generated. The authenticated user becomes the event owner.
+// @Description Create a new conference event. Only name is accepted in the body; id, event_code and timestamps are server-generated. The authenticated user becomes the event owner.
 // @Tags events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param event body CreateEventRequest true "Event data (name and slug only)"
+// @Param event body CreateEventRequest true "Event data (name only)"
 // @Success 201 {object} controllers.CreateEventSuccessResponse "data contains the created event"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
@@ -79,7 +75,7 @@ func (c *ScheduleController) CreateEvent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	now := time.Now()
-	event := domain.NewEvent(req.Name, req.Slug, userID, now, now)
+	event := domain.NewEvent(req.Name, "", userID, now, now)
 	if err := c.Service.CreateEvent(r.Context(), event); err != nil {
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
 		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())

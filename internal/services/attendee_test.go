@@ -49,10 +49,6 @@ func (m *mockEventRepository) GetByID(ctx context.Context, id string) (*domain.E
 	return ev, nil
 }
 
-func (m *mockEventRepository) GetBySlug(ctx context.Context, slug string) (*domain.Event, error) {
-	return nil, domain.ErrNotFound
-}
-
 func (m *mockEventRepository) ListByOwnerID(ctx context.Context, ownerID string) ([]*domain.Event, error) {
 	return nil, nil
 }

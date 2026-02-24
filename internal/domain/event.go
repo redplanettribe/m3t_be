@@ -17,17 +17,17 @@ var ErrForbidden = errors.New("forbidden")
 type Event struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
+	EventCode string    `json:"event_code"`
 	OwnerID   string    `json:"owner_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // NewEvent returns a new Event with the given fields. ID is typically set by the repository on create.
-func NewEvent(name, slug, ownerID string, createdAt, updatedAt time.Time) *Event {
+func NewEvent(name, eventCode, ownerID string, createdAt, updatedAt time.Time) *Event {
 	return &Event{
 		Name:      name,
-		Slug:      slug,
+		EventCode: eventCode,
 		OwnerID:   ownerID,
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
@@ -38,7 +38,6 @@ func NewEvent(name, slug, ownerID string, createdAt, updatedAt time.Time) *Event
 type EventRepository interface {
 	Create(ctx context.Context, event *Event) error
 	GetByID(ctx context.Context, id string) (*Event, error)
-	GetBySlug(ctx context.Context, slug string) (*Event, error)
 	ListByOwnerID(ctx context.Context, ownerID string) ([]*Event, error)
 	Delete(ctx context.Context, id string) error
 }

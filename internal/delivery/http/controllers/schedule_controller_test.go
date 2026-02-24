@@ -161,20 +161,19 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 	}{
 		{
 			name:           "success",
-			body:           `{"name":"Conf 2025","slug":"conf-2025"}`,
+			body:           `{"name":"Conf 2025"}`,
 			wantStatus:     http.StatusCreated,
 			wantBodySubstr: "",
 			decodeEvent:    true,
 			checkEvent: func(t *testing.T, event domain.Event) {
 				assert.Equal(t, "ev-created", event.ID)
 				assert.Equal(t, "Conf 2025", event.Name)
-				assert.Equal(t, "conf-2025", event.Slug)
 				assert.Equal(t, "user-123", event.OwnerID)
 			},
 		},
 		{
 			name:           "no user in context",
-			body:           `{"name":"Conf 2025","slug":"conf-2025"}`,
+			body:           `{"name":"Conf 2025"}`,
 			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
 			decodeEvent:    false,
@@ -192,23 +191,15 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 		},
 		{
 			name:           "missing name",
-			body:           `{"slug":"conf-2025"}`,
+			body:           `{}`,
 			wantStatus:     http.StatusBadRequest,
 			wantBodySubstr: "name is required",
 			decodeEvent:    false,
 			checkEvent:     nil,
 		},
 		{
-			name:           "missing slug",
-			body:           `{"name":"Conf 2025"}`,
-			wantStatus:     http.StatusBadRequest,
-			wantBodySubstr: "slug is required",
-			decodeEvent:    false,
-			checkEvent:     nil,
-		},
-		{
 			name:           "unknown field rejected",
-			body:           `{"name":"Conf","slug":"conf","id":"custom-id"}`,
+			body:           `{"name":"Conf","id":"custom-id"}`,
 			wantStatus:     http.StatusBadRequest,
 			wantBodySubstr: "unknown field",
 			decodeEvent:    false,
@@ -216,7 +207,7 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 		},
 		{
 			name:           "service error",
-			body:           `{"name":"Conf","slug":"conf"}`,
+			body:           `{"name":"Conf"}`,
 			fakeErr:        errors.New("db error"),
 			wantStatus:     http.StatusInternalServerError,
 			wantBodySubstr: "db error",
@@ -354,8 +345,8 @@ func TestScheduleController_ListMyEvents(t *testing.T) {
 			name: "success with events",
 			eventsByOwner: map[string][]*domain.Event{
 				"user-123": {
-					{ID: "ev-1", Name: "Conf A", Slug: "conf-a", OwnerID: "user-123"},
-					{ID: "ev-2", Name: "Conf B", Slug: "conf-b", OwnerID: "user-123"},
+					{ID: "ev-1", Name: "Conf A", OwnerID: "user-123"},
+					{ID: "ev-2", Name: "Conf B", OwnerID: "user-123"},
 				},
 			},
 			wantStatus:     http.StatusOK,
@@ -449,7 +440,7 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 				sessions []*domain.Session
 			}{
 				"ev-123": {
-					event:    &domain.Event{ID: "ev-123", Name: "Conf 2025", Slug: "conf-2025", OwnerID: "user-1"},
+					event:    &domain.Event{ID: "ev-123", Name: "Conf 2025", OwnerID: "user-1"},
 					rooms:    []*domain.Room{{ID: "room-1", EventID: "ev-123", Name: "Room A"}},
 					sessions: []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []string{}}},
 				},

@@ -17,7 +17,6 @@ import (
 // fakeEventRepo is an in-memory EventRepository for tests.
 type fakeEventRepo struct {
 	byID   map[string]*domain.Event
-	bySlug map[string]*domain.Event
 	nextID int
 	err    error // if set, Create returns this error
 }
@@ -25,7 +24,6 @@ type fakeEventRepo struct {
 func newFakeEventRepo() *fakeEventRepo {
 	return &fakeEventRepo{
 		byID:   make(map[string]*domain.Event),
-		bySlug: make(map[string]*domain.Event),
 		nextID: 1,
 	}
 }
@@ -37,7 +35,6 @@ func (f *fakeEventRepo) Create(ctx context.Context, e *domain.Event) error {
 	e.ID = fmt.Sprintf("ev-%d", f.nextID)
 	f.nextID++
 	f.byID[e.ID] = e
-	f.bySlug[e.Slug] = e
 	return nil
 }
 
@@ -46,13 +43,6 @@ func (f *fakeEventRepo) GetByID(ctx context.Context, id string) (*domain.Event, 
 		return e, nil
 	}
 	return nil, domain.ErrNotFound
-}
-
-func (f *fakeEventRepo) GetBySlug(ctx context.Context, slug string) (*domain.Event, error) {
-	if e, ok := f.bySlug[slug]; ok {
-		return e, nil
-	}
-	return nil, errors.New("not found")
 }
 
 func (f *fakeEventRepo) ListByOwnerID(ctx context.Context, ownerID string) ([]*domain.Event, error) {
@@ -74,12 +64,10 @@ func (f *fakeEventRepo) ListByOwnerID(ctx context.Context, ownerID string) ([]*d
 }
 
 func (f *fakeEventRepo) Delete(ctx context.Context, id string) error {
-	e, ok := f.byID[id]
-	if !ok {
+	if _, ok := f.byID[id]; !ok {
 		return domain.ErrNotFound
 	}
 	delete(f.byID, id)
-	delete(f.bySlug, e.Slug)
 	return nil
 }
 
@@ -344,14 +332,15 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 				er := newFakeEventRepo()
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			event:   &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1"},
+			event:   &domain.Event{Name: "Conf", OwnerID: "user-1"},
 			wantErr: false,
 			assert: func(t *testing.T, eventRepo *fakeEventRepo, event *domain.Event) {
 				require.NotEmpty(t, event.ID)
 				assert.False(t, event.CreatedAt.IsZero())
 				assert.False(t, event.UpdatedAt.IsZero())
 				assert.Equal(t, "Conf", event.Name)
-				assert.Equal(t, "conf-2025", event.Slug)
+				assert.Len(t, event.EventCode, 4)
+				assert.Regexp(t, "^[a-z0-9]{4}$", event.EventCode)
 				assert.Equal(t, "user-1", event.OwnerID)
 				got, ok := eventRepo.byID[event.ID]
 				require.True(t, ok)
@@ -366,7 +355,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 				er.err = errors.New("db error")
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			event:   &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1"},
+			event:   &domain.Event{Name: "Conf", OwnerID: "user-1"},
 			wantErr: true,
 			assert:  func(t *testing.T, _ *fakeEventRepo, _ *domain.Event) {},
 		},
@@ -375,7 +364,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			event:   &domain.Event{Name: "Conf", Slug: "conf-2025"},
+			event:   &domain.Event{Name: "Conf"},
 			wantErr: true,
 			assert:  func(t *testing.T, _ *fakeEventRepo, _ *domain.Event) {},
 		},
@@ -385,7 +374,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
 			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
-			ev := &domain.Event{Name: tt.event.Name, Slug: tt.event.Slug, OwnerID: tt.event.OwnerID}
+			ev := &domain.Event{Name: tt.event.Name, OwnerID: tt.event.OwnerID}
 			err := svc.CreateEvent(ctx, ev)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -508,9 +497,9 @@ func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
 				// Create two events for user-1, one for user-2
-				_ = er.Create(ctx, &domain.Event{Name: "E1", Slug: "e1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
-				_ = er.Create(ctx, &domain.Event{Name: "E2", Slug: "e2", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
-				_ = er.Create(ctx, &domain.Event{Name: "Other", Slug: "other", OwnerID: "user-2", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "E1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "E2", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Other", OwnerID: "user-2", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			ownerID: "user-1",
@@ -525,7 +514,7 @@ func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
 			name: "empty for unknown owner",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "E1", Slug: "e1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "E1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			ownerID: "user-none",
@@ -562,7 +551,7 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 			name: "success with rooms and sessions",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				ev, _ := er.GetByID(ctx, "ev-1")
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: ev.ID, Name: "Room A"}}
@@ -596,7 +585,7 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 			name: "success empty rooms and sessions",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID: "ev-1",
@@ -649,7 +638,7 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 			name: "success",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:       "ev-1",
@@ -671,7 +660,7 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 			name: "forbidden not owner",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:       "ev-1",
@@ -724,7 +713,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 			name: "success toggles false to true",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A", NotBookable: false}}
 				return er, sr, &fakeSessionizeFetcher{}
@@ -743,7 +732,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 			name: "success toggles true to false",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A", NotBookable: true}}
 				return er, sr, &fakeSessionizeFetcher{}
@@ -772,7 +761,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 			name: "forbidden not owner",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
 				return er, sr, &fakeSessionizeFetcher{}
@@ -787,7 +776,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 			name: "room not found",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-1",
@@ -800,7 +789,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 			name: "room belongs to different event",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				er := newFakeEventRepo()
-				_ = er.Create(ctx, &domain.Event{Name: "Conf", Slug: "conf-2025", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-99", Name: "Room A"}}
 				return er, sr, &fakeSessionizeFetcher{}
@@ -858,7 +847,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			userIDToAdd: "user-2",
 			ownerID:     "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			wantErr: false,
 		},
@@ -868,7 +857,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			userIDToAdd: "user-2",
 			ownerID:     "user-other",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			wantErr:       true,
 			wantForbidden: true,
@@ -888,7 +877,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			userIDToAdd: "user-1",
 			ownerID:     "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			wantErr:     true,
 			wantConflict: true,
@@ -899,7 +888,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			userIDToAdd: "user-2",
 			ownerID:     "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupTeamRepo: func(tr *fakeEventTeamMemberRepo) {
 				tr.Add(ctx, "ev-1", "user-2")
@@ -960,7 +949,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			eventID:  "ev-1",
 			callerID: "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupTeamRepo: func(tr *fakeEventTeamMemberRepo) {
 				tr.Add(ctx, "ev-1", "user-2")
@@ -974,7 +963,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			eventID:  "ev-1",
 			callerID: "user-other",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			wantErr:       true,
 			wantForbidden: true,
@@ -992,7 +981,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			eventID:  "ev-1",
 			callerID: "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			wantErr:    false,
 			wantCount: 0,
@@ -1046,7 +1035,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 			userIDToRemove: "user-2",
 			ownerID:        "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupTeamRepo: func(tr *fakeEventTeamMemberRepo) {
 				tr.Add(ctx, "ev-1", "user-2")
@@ -1059,7 +1048,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 			userIDToRemove: "user-2",
 			ownerID:        "user-other",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupTeamRepo: func(tr *fakeEventTeamMemberRepo) {
 				tr.Add(ctx, "ev-1", "user-2")
@@ -1082,7 +1071,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 			userIDToRemove: "user-99",
 			ownerID:        "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			wantErr:       true,
 			wantNotFound: true,
@@ -1140,7 +1129,7 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			email:   "teammate@example.com",
 			ownerID: "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupUserRepo: func(ur *fakeUserRepoForSchedule) {
 				ur.addUser("teammate@example.com", "user-2")
@@ -1154,7 +1143,7 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			email:   "nobody@example.com",
 			ownerID: "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupUserRepo:     func(ur *fakeUserRepoForSchedule) {},
 			wantErr:           true,
@@ -1166,7 +1155,7 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			email:   "Teammate@Example.COM",
 			ownerID: "user-1",
 			setupEvent: func(er *fakeEventRepo) {
-				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", Slug: "conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupUserRepo: func(ur *fakeUserRepoForSchedule) {
 				ur.addUser("teammate@example.com", "user-2")

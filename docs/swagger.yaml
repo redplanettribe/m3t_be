@@ -16,8 +16,6 @@ definitions:
     properties:
       name:
         type: string
-      slug:
-        type: string
     type: object
   controllers.CreateEventSuccessResponse:
     properties:
@@ -176,13 +174,13 @@ definitions:
     properties:
       created_at:
         type: string
+      event_code:
+        type: string
       id:
         type: string
       name:
         type: string
       owner_id:
-        type: string
-      slug:
         type: string
       updated_at:
         type: string
@@ -422,11 +420,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new conference event. Only name and slug are accepted
-        in the body; id and timestamps are server-generated. The authenticated user
+      description: Create a new conference event. Only name is accepted in the body;
+        id, event_code and timestamps are server-generated. The authenticated user
         becomes the event owner.
       parameters:
-      - description: Event data (name and slug only)
+      - description: Event data (name only)
         in: body
         name: event
         required: true
