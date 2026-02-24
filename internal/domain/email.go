@@ -20,7 +20,15 @@ type WelcomeMessageEmailData struct {
 	Language  string // optional, for future locale/templates
 }
 
+// LoginCodeEmailData holds data for the passwordless login code email.
+type LoginCodeEmailData struct {
+	Email             string
+	Code              string
+	ExpiresInMinutes  int
+}
+
 // EmailService defines the contract for sending domain-level emails.
 type EmailService interface {
 	SendWelcomeMessage(ctx context.Context, data *WelcomeMessageEmailData) error
+	SendLoginCode(ctx context.Context, data *LoginCodeEmailData) error
 }

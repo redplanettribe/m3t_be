@@ -59,12 +59,25 @@ Table session_tags {
 Table users {
   id uuid [pk, default: `gen_random_uuid()`]
   email varchar(255) [not null, unique]
-  password_hash text [not null]
-  salt text [not null]
+  password_hash text
+  salt text
   name varchar(255)
   last_name varchar(255)
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
+}
+
+Table login_codes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(255) [not null]
+  code_hash text [not null]
+  expires_at timestamptz [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    email
+    expires_at
+  }
 }
 
 Table event_team_members {

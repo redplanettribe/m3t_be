@@ -2,8 +2,9 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
-	"errors"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -42,26 +43,6 @@ func (f *fakeRoleRepo) ListByUserID(ctx context.Context, userID string) ([]*doma
 		return roles, nil
 	}
 	return nil, nil
-}
-
-// fakePasswordHasher implements domain.PasswordHasher for tests.
-type fakePasswordHasher struct {
-	salt string
-	hash string
-}
-
-func (f *fakePasswordHasher) GenerateSalt() (string, error) { return f.salt, nil }
-func (f *fakePasswordHasher) Hash(salt, password string) (string, error) {
-	if f.hash != "" {
-		return f.hash, nil
-	}
-	return "hash-" + password, nil
-}
-func (f *fakePasswordHasher) Compare(hash, salt, password string) error {
-	if f.hash != "" && hash != f.hash {
-		return errors.New("mismatch")
-	}
-	return nil
 }
 
 // fakeTokenIssuer implements domain.TokenIssuer for tests.
@@ -144,6 +125,28 @@ func (f *fakeUserRepo) Update(ctx context.Context, u *domain.User) error {
 
 func (f *fakeUserRepo) AssignRole(ctx context.Context, userID, roleID string) error { return nil }
 
+// fakeLoginCodeRepo implements domain.LoginCodeRepository for tests.
+type fakeLoginCodeRepo struct {
+	codes map[string]string // email -> codeHash
+}
+
+func newFakeLoginCodeRepo() *fakeLoginCodeRepo {
+	return &fakeLoginCodeRepo{codes: make(map[string]string)}
+}
+
+func (f *fakeLoginCodeRepo) Create(ctx context.Context, email, codeHash string, expiresAt time.Time) error {
+	f.codes[email] = codeHash
+	return nil
+}
+
+func (f *fakeLoginCodeRepo) Consume(ctx context.Context, email, codeHash string) (bool, error) {
+	if f.codes[email] == codeHash {
+		delete(f.codes, email)
+		return true, nil
+	}
+	return false, nil
+}
+
 func TestUserService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
@@ -183,7 +186,7 @@ func TestUserService_GetByID(t *testing.T) {
 
 	roleRepo := newFakeRoleRepo()
 	roleRepo.byCode["attendee"] = domain.NewRole("role-1", "attendee")
-	hasher := &fakePasswordHasher{}
+	loginCodeRepo := newFakeLoginCodeRepo()
 	issuer := &fakeTokenIssuer{}
 	tokenExpiry := 1 * time.Hour
 
@@ -191,7 +194,7 @@ func TestUserService_GetByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeUserRepo()
 			tt.setup(fake)
-			svc := NewUserService(fake, roleRepo, hasher, issuer, tokenExpiry, nil)
+			svc := NewUserService(fake, roleRepo, loginCodeRepo, issuer, tokenExpiry, nil)
 
 			user, err := svc.GetByID(ctx, tt.id)
 
@@ -261,7 +264,7 @@ func TestUserService_Update(t *testing.T) {
 
 	roleRepo := newFakeRoleRepo()
 	roleRepo.byCode["attendee"] = domain.NewRole("role-1", "attendee")
-	hasher := &fakePasswordHasher{}
+	loginCodeRepo := newFakeLoginCodeRepo()
 	issuer := &fakeTokenIssuer{}
 	tokenExpiry := 1 * time.Hour
 
@@ -269,7 +272,7 @@ func TestUserService_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeUserRepo()
 			tt.setup(fake)
-			svc := NewUserService(fake, roleRepo, hasher, issuer, tokenExpiry, nil)
+			svc := NewUserService(fake, roleRepo, loginCodeRepo, issuer, tokenExpiry, nil)
 
 			err := svc.Update(ctx, tt.user)
 
@@ -288,53 +291,71 @@ func TestUserService_Update(t *testing.T) {
 	}
 }
 
-func TestUserService_SignUp(t *testing.T) {
+func TestUserService_RequestLoginCode(t *testing.T) {
 	ctx := context.Background()
 	userRepo := newFakeUserRepo()
 	roleRepo := newFakeRoleRepo()
-	roleRepo.byCode["attendee"] = domain.NewRole("role-1", "attendee")
-	roleRepo.byCode["admin"] = domain.NewRole("role-2", "admin")
-	hasher := &fakePasswordHasher{salt: "s", hash: "h"}
+	loginCodeRepo := newFakeLoginCodeRepo()
 	issuer := &fakeTokenIssuer{}
-	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour, nil)
+	svc := NewUserService(userRepo, roleRepo, loginCodeRepo, issuer, time.Hour, nil)
 
-	user, err := svc.SignUp(ctx, "alice@example.com", "password8", "Alice", "", "attendee")
+	err := svc.RequestLoginCode(ctx, "alice@example.com")
 	require.NoError(t, err)
-	require.NotNil(t, user)
-	assert.Equal(t, "created-1", user.ID)
-	assert.Equal(t, "alice@example.com", user.Email)
-	assert.Equal(t, "Alice", user.Name)
-	assert.Equal(t, "h", user.PasswordHash)
-	assert.Equal(t, "s", user.Salt)
-	// default role when invalid
-	user2, err := svc.SignUp(ctx, "bob@example.com", "password9", "Bob", "", "invalid")
-	require.NoError(t, err)
-	require.NotNil(t, user2)
-	assert.Equal(t, "bob@example.com", user2.Email)
+	assert.Contains(t, loginCodeRepo.codes, "alice@example.com")
+	assert.NotEmpty(t, loginCodeRepo.codes["alice@example.com"])
+
+	err = svc.RequestLoginCode(ctx, "not-an-email")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid email")
 }
 
-func TestUserService_Login(t *testing.T) {
+func TestUserService_VerifyLoginCode(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	userRepo := newFakeUserRepo()
-	u := &domain.User{ID: "u1", Email: "login@example.com", PasswordHash: "h", Salt: "s", Name: "Login User", CreatedAt: now, UpdatedAt: now}
-	userRepo.byID["u1"] = u
-	userRepo.byEmail["login@example.com"] = u
 	roleRepo := newFakeRoleRepo()
-	roleRepo.listByUID["u1"] = []*domain.Role{domain.NewRole("r1", "attendee")}
-	hasher := &fakePasswordHasher{salt: "s", hash: "h"}
-	issuer := &fakeTokenIssuer{token: "jwt-token-123"}
-	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour, nil)
+	roleRepo.byCode["attendee"] = domain.NewRole("role-1", "attendee")
+	loginCodeRepo := newFakeLoginCodeRepo()
+	issuer := &fakeTokenIssuer{token: "jwt-123"}
 
-	token, user, err := svc.Login(ctx, "login@example.com", "anypassword")
+	// Pre-store a code for "newuser@example.com" (new user) and "existing@example.com" (existing user)
+	code := "123456"
+	codeHash := hex.EncodeToString(sha256Sum([]byte(code)))
+	loginCodeRepo.codes["newuser@example.com"] = codeHash
+	loginCodeRepo.codes["existing@example.com"] = codeHash
+
+	existingUser := &domain.User{ID: "u1", Email: "existing@example.com", Name: "Existing", CreatedAt: now, UpdatedAt: now}
+	userRepo.byID["u1"] = existingUser
+	userRepo.byEmail["existing@example.com"] = existingUser
+	roleRepo.listByUID["u1"] = []*domain.Role{domain.NewRole("r1", "attendee")}
+
+	svc := NewUserService(userRepo, roleRepo, loginCodeRepo, issuer, time.Hour, nil)
+
+	// Verify new user: creates user and returns token
+	token, user, err := svc.VerifyLoginCode(ctx, "newuser@example.com", code)
 	require.NoError(t, err)
-	assert.Equal(t, "jwt-token-123", token)
+	assert.Equal(t, "jwt-123", token)
+	require.NotNil(t, user)
+	assert.Equal(t, "newuser@example.com", user.Email)
+	assert.Equal(t, "created-1", user.ID)
+	_, stillStored := loginCodeRepo.codes["newuser@example.com"]
+	assert.False(t, stillStored, "code should be consumed")
+
+	// Verify existing user
+	token, user, err = svc.VerifyLoginCode(ctx, "existing@example.com", code)
+	require.NoError(t, err)
+	assert.Equal(t, "jwt-123", token)
 	require.NotNil(t, user)
 	assert.Equal(t, "u1", user.ID)
-	assert.Equal(t, "login@example.com", user.Email)
-	assert.Equal(t, "Login User", user.Name)
+	assert.Equal(t, "Existing", user.Name)
 
-	_, _, err = svc.Login(ctx, "wrong@example.com", "x")
+	// Invalid/expired code
+	_, _, err = svc.VerifyLoginCode(ctx, "newuser@example.com", "000000")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid credentials")
+	assert.Contains(t, err.Error(), "invalid or expired")
+}
+
+func sha256Sum(b []byte) []byte {
+	h := sha256.Sum256(b)
+	return h[:]
 }

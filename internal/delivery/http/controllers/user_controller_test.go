@@ -22,29 +22,25 @@ import (
 
 // fakeUserService implements domain.UserService for handler tests.
 type fakeUserService struct {
-	getByIDUser *domain.User
-	getByIDErr  error
-	updateErr   error
-	lastUpdate  *domain.User
-	signUpUser  *domain.User
-	signUpErr   error
-	loginToken  string
-	loginUser   *domain.User
-	loginErr    error
+	getByIDUser        *domain.User
+	getByIDErr         error
+	updateErr          error
+	lastUpdate         *domain.User
+	requestLoginCodeErr error
+	verifyToken        string
+	verifyUser         *domain.User
+	verifyErr          error
 }
 
-func (f *fakeUserService) SignUp(ctx context.Context, email, password, name, lastName, role string) (*domain.User, error) {
-	if f.signUpErr != nil {
-		return nil, f.signUpErr
-	}
-	return f.signUpUser, nil
+func (f *fakeUserService) RequestLoginCode(ctx context.Context, email string) error {
+	return f.requestLoginCodeErr
 }
 
-func (f *fakeUserService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
-	if f.loginErr != nil {
-		return "", nil, f.loginErr
+func (f *fakeUserService) VerifyLoginCode(ctx context.Context, email, code string) (string, *domain.User, error) {
+	if f.verifyErr != nil {
+		return "", nil, f.verifyErr
 	}
-	return f.loginToken, f.loginUser, nil
+	return f.verifyToken, f.verifyUser, nil
 }
 
 func (f *fakeUserService) GetByID(ctx context.Context, id string) (*domain.User, error) {
@@ -249,29 +245,20 @@ func TestUserController_UpdateMe(t *testing.T) {
 	}
 }
 
-func TestUserController_SignUp(t *testing.T) {
+func TestUserController_RequestLoginCode(t *testing.T) {
 	userLogger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-	now := time.Now()
 
 	tests := []struct {
 		name         string
 		body         string
-		fakeUser     *domain.User
 		fakeErr      error
 		wantStatus   int
 		wantBodyCode string
-		checkUser    func(t *testing.T, u *domain.User)
 	}{
 		{
 			name:       "success",
-			body:       `{"email":"alice@example.com","password":"password8","name":"Alice","role":"attendee"}`,
-			fakeUser:   &domain.User{ID: "id-1", Email: "alice@example.com", Name: "Alice", CreatedAt: now, UpdatedAt: now},
-			wantStatus: http.StatusCreated,
-			checkUser: func(t *testing.T, u *domain.User) {
-				assert.Equal(t, "id-1", u.ID)
-				assert.Equal(t, "alice@example.com", u.Email)
-				assert.Equal(t, "Alice", u.Name)
-			},
+			body:       `{"email":"alice@example.com"}`,
+			wantStatus: http.StatusOK,
 		},
 		{
 			name:         "invalid json",
@@ -281,41 +268,33 @@ func TestUserController_SignUp(t *testing.T) {
 		},
 		{
 			name:         "missing email",
-			body:         `{"password":"password8","name":"Alice"}`,
+			body:         `{}`,
 			wantStatus:   http.StatusBadRequest,
 			wantBodyCode: helpers.ErrCodeBadRequest,
 		},
 		{
-			name:       "duplicate email from service",
-			body:       `{"email":"taken@example.com","password":"password8","name":"X"}`,
-			fakeErr:    errors.New("duplicate key"),
-			wantStatus: http.StatusBadRequest,
+			name:         "invalid email from service",
+			body:         `{"email":"bad"}`,
+			fakeErr:      errors.New("invalid email format"),
+			wantStatus:   http.StatusBadRequest,
 			wantBodyCode: helpers.ErrCodeBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeUserService{signUpUser: tt.fakeUser, signUpErr: tt.fakeErr}
+			fake := &fakeUserService{requestLoginCodeErr: tt.fakeErr}
 			ctrl := NewUserController(userLogger, fake)
-			req := httptest.NewRequest(http.MethodPost, "http://test/auth/signup", bytes.NewBufferString(tt.body))
+			req := httptest.NewRequest(http.MethodPost, "http://test/auth/login/request", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
-			ctrl.SignUp(rr, req)
+			ctrl.RequestLoginCode(rr, req)
 
 			require.Equal(t, tt.wantStatus, rr.Code)
 			var envelope helpers.APIResponse
 			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
-			if tt.wantStatus == http.StatusCreated && tt.checkUser != nil {
-				require.Nil(t, envelope.Error)
-				dataBytes, err := json.Marshal(envelope.Data)
-				require.NoError(t, err)
-				var u domain.User
-				require.NoError(t, json.Unmarshal(dataBytes, &u))
-				tt.checkUser(t, &u)
-			}
-			if tt.wantBodyCode != "" && tt.wantStatus != http.StatusCreated {
+			if tt.wantStatus != http.StatusOK && tt.wantBodyCode != "" {
 				require.NotNil(t, envelope.Error)
 				assert.Equal(t, tt.wantBodyCode, envelope.Error.Code)
 			}
@@ -323,7 +302,7 @@ func TestUserController_SignUp(t *testing.T) {
 	}
 }
 
-func TestUserController_Login(t *testing.T) {
+func TestUserController_VerifyLoginCode(t *testing.T) {
 	userLogger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 	now := time.Now()
 
@@ -340,7 +319,7 @@ func TestUserController_Login(t *testing.T) {
 	}{
 		{
 			name:       "success",
-			body:       `{"email":"alice@example.com","password":"secret"}`,
+			body:       `{"email":"alice@example.com","code":"123456"}`,
 			fakeToken:  "bearer-token-xyz",
 			fakeUser:   &domain.User{ID: "id-1", Email: "alice@example.com", Name: "Alice", CreatedAt: now, UpdatedAt: now},
 			wantStatus: http.StatusOK,
@@ -352,14 +331,14 @@ func TestUserController_Login(t *testing.T) {
 			},
 		},
 		{
-			name:         "invalid credentials",
-			body:         `{"email":"alice@example.com","password":"wrong"}`,
-			fakeErr:      errors.New("invalid credentials"),
+			name:         "invalid or expired code",
+			body:         `{"email":"alice@example.com","code":"000000"}`,
+			fakeErr:      errors.New("invalid or expired code"),
 			wantStatus:   http.StatusUnauthorized,
 			wantBodyCode: helpers.ErrCodeUnauthorized,
 		},
 		{
-			name:         "missing password",
+			name:         "missing code",
 			body:         `{"email":"alice@example.com"}`,
 			wantStatus:   http.StatusBadRequest,
 			wantBodyCode: helpers.ErrCodeBadRequest,
@@ -368,13 +347,13 @@ func TestUserController_Login(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeUserService{loginToken: tt.fakeToken, loginUser: tt.fakeUser, loginErr: tt.fakeErr}
+			fake := &fakeUserService{verifyToken: tt.fakeToken, verifyUser: tt.fakeUser, verifyErr: tt.fakeErr}
 			ctrl := NewUserController(userLogger, fake)
-			req := httptest.NewRequest(http.MethodPost, "http://test/auth/login", bytes.NewBufferString(tt.body))
+			req := httptest.NewRequest(http.MethodPost, "http://test/auth/login/verify", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
-			ctrl.Login(rr, req)
+			ctrl.VerifyLoginCode(rr, req)
 
 			require.Equal(t, tt.wantStatus, rr.Code)
 			var envelope helpers.APIResponse

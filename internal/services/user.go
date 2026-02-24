@@ -2,10 +2,12 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -14,94 +16,100 @@ import (
 )
 
 const (
-	minPasswordLen = 8
-	defaultRole    = "attendee"
+	defaultRole         = "attendee"
+	loginCodeDigits     = 6
+	loginCodeExpiryMins = 15
 )
 
-var emailRegexp = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+var (
+	emailRegexp    = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	loginCodeRegex = regexp.MustCompile(`^\d{6}$`)
+)
 
 type userService struct {
 	userRepo       domain.UserRepository
 	roleRepo       domain.RoleRepository
-	passwordHasher domain.PasswordHasher
+	loginCodeRepo  domain.LoginCodeRepository
 	tokenIssuer    domain.TokenIssuer
 	tokenExpiry    time.Duration
-	emailService   domain.EmailService // optional; nil means no welcome email
+	emailService   domain.EmailService
 }
 
 // NewUserService creates a UserService with the given repositories and auth ports.
-// emailService is optional; pass nil to skip sending welcome email on signup.
-func NewUserService(userRepo domain.UserRepository, roleRepo domain.RoleRepository, passwordHasher domain.PasswordHasher, tokenIssuer domain.TokenIssuer, tokenExpiry time.Duration, emailService domain.EmailService) domain.UserService {
+func NewUserService(userRepo domain.UserRepository, roleRepo domain.RoleRepository, loginCodeRepo domain.LoginCodeRepository, tokenIssuer domain.TokenIssuer, tokenExpiry time.Duration, emailService domain.EmailService) domain.UserService {
 	return &userService{
-		userRepo:       userRepo,
-		roleRepo:       roleRepo,
-		passwordHasher: passwordHasher,
-		tokenIssuer:    tokenIssuer,
-		tokenExpiry:    tokenExpiry,
-		emailService:   emailService,
+		userRepo:      userRepo,
+		roleRepo:      roleRepo,
+		loginCodeRepo: loginCodeRepo,
+		tokenIssuer:   tokenIssuer,
+		tokenExpiry:   tokenExpiry,
+		emailService: emailService,
 	}
 }
 
-func (s *userService) SignUp(ctx context.Context, email, password, name, lastName, role string) (*domain.User, error) {
+func (s *userService) RequestLoginCode(ctx context.Context, email string) error {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if !emailRegexp.MatchString(email) {
-		return nil, fmt.Errorf("invalid email format")
+		return fmt.Errorf("invalid email format")
 	}
-	if len(password) < minPasswordLen {
-		return nil, fmt.Errorf("password must be at least %d characters", minPasswordLen)
-	}
-
-	roleCode := strings.TrimSpace(strings.ToLower(role))
-	if roleCode != "admin" && roleCode != "attendee" {
-		roleCode = defaultRole
-	}
-
-	salt, err := s.passwordHasher.GenerateSalt()
+	code, err := generateLoginCode(loginCodeDigits)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to generate code: %w", err)
 	}
-	hash, err := s.passwordHasher.Hash(salt, password)
-	if err != nil {
-		return nil, err
+	codeHash := hashLoginCode(code)
+	expiresAt := time.Now().Add(loginCodeExpiryMins * time.Minute)
+	if err := s.loginCodeRepo.Create(ctx, email, codeHash, expiresAt); err != nil {
+		return fmt.Errorf("failed to store login code: %w", err)
 	}
-
-	now := time.Now()
-	user := domain.NewUser(email, hash, salt, strings.TrimSpace(name), strings.TrimSpace(lastName), now, now)
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	roleRecord, err := s.roleRepo.GetByCode(ctx, roleCode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get role %q: %w", roleCode, err)
-	}
-	if err := s.userRepo.AssignRole(ctx, user.ID, roleRecord.ID); err != nil {
-		return nil, fmt.Errorf("failed to assign role: %w", err)
-	}
-
 	if s.emailService != nil {
-		welcomeData := &domain.WelcomeMessageEmailData{
-			Email:     user.Email,
-			FirstName: user.Name,
-			UserID:    user.ID,
+		data := &domain.LoginCodeEmailData{
+			Email:            email,
+			Code:             code,
+			ExpiresInMinutes: loginCodeExpiryMins,
 		}
-		if err := s.emailService.SendWelcomeMessage(ctx, welcomeData); err != nil {
-			log.Printf("[USER] Failed to send welcome email: %v", err)
+		if err := s.emailService.SendLoginCode(ctx, data); err != nil {
+			return fmt.Errorf("failed to send login code email: %w", err)
 		}
 	}
-
-	return user, nil
+	return nil
 }
 
-func (s *userService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
-	user, err := s.userRepo.GetByEmail(ctx, strings.TrimSpace(strings.ToLower(email)))
+func (s *userService) VerifyLoginCode(ctx context.Context, email, code string) (string, *domain.User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if !emailRegexp.MatchString(email) {
+		return "", nil, fmt.Errorf("invalid email format")
+	}
+	code = strings.TrimSpace(code)
+	if !loginCodeRegex.MatchString(code) {
+		return "", nil, fmt.Errorf("invalid or expired code")
+	}
+	codeHash := hashLoginCode(code)
+	consumed, err := s.loginCodeRepo.Consume(ctx, email, codeHash)
 	if err != nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+		return "", nil, fmt.Errorf("failed to verify code: %w", err)
 	}
-	if err := s.passwordHasher.Compare(user.PasswordHash, user.Salt, password); err != nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+	if !consumed {
+		return "", nil, fmt.Errorf("invalid or expired code")
 	}
-
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", nil, fmt.Errorf("failed to get user: %w", err)
+		}
+		// New user: create with no password, assign attendee role
+		roleRecord, err := s.roleRepo.GetByCode(ctx, defaultRole)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to get role %q: %w", defaultRole, err)
+		}
+		now := time.Now()
+		user = domain.NewUser(email, "", "", "", "", now, now)
+		if err := s.userRepo.Create(ctx, user); err != nil {
+			return "", nil, fmt.Errorf("failed to create user: %w", err)
+		}
+		if err := s.userRepo.AssignRole(ctx, user.ID, roleRecord.ID); err != nil {
+			return "", nil, fmt.Errorf("failed to assign role: %w", err)
+		}
+	}
 	roles, err := s.roleRepo.ListByUserID(ctx, user.ID)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to load roles: %w", err)
@@ -110,12 +118,28 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 	for i, r := range roles {
 		roleCodes[i] = r.Code
 	}
-
 	token, err := s.tokenIssuer.Issue(user.ID, user.Email, roleCodes, s.tokenExpiry)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to sign token: %w", err)
 	}
 	return token, user, nil
+}
+
+func generateLoginCode(digits int) (string, error) {
+	const digitspace = "0123456789"
+	b := make([]byte, digits)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	for i := range b {
+		b[i] = digitspace[int(b[i])%len(digitspace)]
+	}
+	return string(b), nil
+}
+
+func hashLoginCode(code string) string {
+	sum := sha256.Sum256([]byte(code))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *userService) GetByID(ctx context.Context, id string) (*domain.User, error) {

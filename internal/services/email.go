@@ -33,3 +33,19 @@ func (s *emailService) SendWelcomeMessage(ctx context.Context, data *domain.Welc
 	log.Printf("[EMAIL] Welcome email sent to %s", data.Email)
 	return nil
 }
+
+// SendLoginCode sends the passwordless login code email using the "login_code" template.
+func (s *emailService) SendLoginCode(ctx context.Context, data *domain.LoginCodeEmailData) error {
+	if data == nil {
+		return fmt.Errorf("login code email data is nil")
+	}
+	subject, htmlBody, textBody, err := s.renderer.Render("login_code", data)
+	if err != nil {
+		return fmt.Errorf("failed to render login_code template: %w", err)
+	}
+	if err := s.mailer.Send(data.Email, subject, htmlBody, textBody); err != nil {
+		return fmt.Errorf("failed to send login code email: %w", err)
+	}
+	log.Printf("[EMAIL] Login code sent to %s", data.Email)
+	return nil
+}

@@ -58,6 +58,7 @@ func main() {
 	eventTeamMemberRepo := postgres.NewEventTeamMemberRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	roleRepo := postgres.NewRoleRepository(db)
+	loginCodeRepo := postgres.NewLoginCodeRepository(db)
 	sessionizeFetcher := sessionize.NewHTTPFetcher(nil)
 	manageScheduleService := services.NewManageScheduleService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, sessionizeFetcher, 10*time.Second)
 	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
@@ -70,7 +71,6 @@ func main() {
 		}
 		jwtSecret = "dev-secret-change-in-production"
 	}
-	passwordHasher := auth.NewBcryptHasher(10)
 	jwtAuth := auth.NewJWTIssuer(jwtSecret, cfg.JWTExpiry)
 
 	mailerCfg := email.MailerConfig{
@@ -91,7 +91,7 @@ func main() {
 	}
 	templateRenderer := email.NewTemplateRenderer()
 	emailService := services.NewEmailService(mailer, templateRenderer)
-	userService := services.NewUserService(userRepo, roleRepo, passwordHasher, jwtAuth, cfg.JWTExpiry, emailService)
+	userService := services.NewUserService(userRepo, roleRepo, loginCodeRepo, jwtAuth, cfg.JWTExpiry, emailService)
 	userController := controllers.NewUserController(logger, userService)
 	requireAuth := middleware.RequireAuth(jwtAuth, logger)
 

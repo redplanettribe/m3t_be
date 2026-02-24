@@ -14,58 +14,55 @@ import (
 
 var emailRegexp = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
-// SignUpRequest is the request body for POST /auth/signup
-type SignUpRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
-	LastName string `json:"last_name"` // optional
-	Role     string `json:"role"`      // optional: "admin" or "attendee" (defaults to "attendee")
+// RequestLoginCodeRequest is the request body for POST /auth/login/request
+type RequestLoginCodeRequest struct {
+	Email string `json:"email"`
 }
 
 // Validate implements Validator.
-func (s SignUpRequest) Validate() []string {
+func (r RequestLoginCodeRequest) Validate() []string {
 	var errs []string
-	email := strings.TrimSpace(strings.ToLower(s.Email))
+	email := strings.TrimSpace(strings.ToLower(r.Email))
 	if email == "" {
 		errs = append(errs, "email is required")
 	} else if !emailRegexp.MatchString(email) {
 		errs = append(errs, "invalid email format")
 	}
-	if s.Password == "" {
-		errs = append(errs, "password is required")
-	} else if len(s.Password) < 8 {
-		errs = append(errs, "password must be at least 8 characters")
-	}
-	role := strings.TrimSpace(strings.ToLower(s.Role))
-	if role == "atendee" {
-		role = "attendee"
-	}
-	if role != "" && role != "admin" && role != "attendee" {
-		errs = append(errs, "role must be \"admin\" or \"attendee\"")
-	}
 	return errs
 }
 
-// LoginRequest is the request body for POST /auth/login
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+// VerifyLoginCodeRequest is the request body for POST /auth/login/verify
+type VerifyLoginCodeRequest struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
 }
 
 // Validate implements Validator.
-func (l LoginRequest) Validate() []string {
+func (v VerifyLoginCodeRequest) Validate() []string {
 	var errs []string
-	if strings.TrimSpace(l.Email) == "" {
+	email := strings.TrimSpace(strings.ToLower(v.Email))
+	if email == "" {
 		errs = append(errs, "email is required")
+	} else if !emailRegexp.MatchString(email) {
+		errs = append(errs, "invalid email format")
 	}
-	if l.Password == "" {
-		errs = append(errs, "password is required")
+	code := strings.TrimSpace(v.Code)
+	if code == "" {
+		errs = append(errs, "code is required")
+	} else if len(code) != 6 {
+		errs = append(errs, "code must be 6 digits")
+	} else {
+		for _, c := range code {
+			if c < '0' || c > '9' {
+				errs = append(errs, "code must be 6 digits")
+				break
+			}
+		}
 	}
 	return errs
 }
 
-// LoginResponse is the response body for POST /auth/login
+// LoginResponse is the response body for POST /auth/login/verify
 type LoginResponse struct {
 	Token     string       `json:"token"`
 	TokenType string       `json:"token_type"`
@@ -93,13 +90,7 @@ func (u UpdateUserRequest) Validate() []string {
 	return errs
 }
 
-// SignUpSuccessResponse is the success response envelope for POST /auth/signup (201).
-type SignUpSuccessResponse struct {
-	Data  *domain.User `json:"data"`
-	Error *helpers.APIError `json:"error"`
-}
-
-// LoginSuccessResponse is the success response envelope for POST /auth/login (200).
+// LoginSuccessResponse is the success response envelope for POST /auth/login/verify (200).
 type LoginSuccessResponse struct {
 	Data  LoginResponse `json:"data"`
 	Error *helpers.APIError `json:"error"`
@@ -131,34 +122,26 @@ func NewUserController(logger *slog.Logger, svc domain.UserService) *UserControl
 	}
 }
 
-// SignUp godoc
-// @Summary Sign up a new user
-// @Description Create a new user with email, password, and name. Optional role: "admin" or "attendee" (defaults to "attendee"). Password is stored hashed.
+// RequestLoginCode godoc
+// @Summary Request a login code
+// @Description Send a one-time login code to the given email. The code expires after a short period.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body SignUpRequest true "Sign-up data"
-// @Success 201 {object} controllers.SignUpSuccessResponse "data contains the created user"
+// @Param body body RequestLoginCodeRequest true "Email to receive the code"
+// @Success 200 {object} helpers.APIResponse "success"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
-// @Router /auth/signup [post]
-func (c *UserController) SignUp(w http.ResponseWriter, r *http.Request) {
-	var req SignUpRequest
+// @Router /auth/login/request [post]
+func (c *UserController) RequestLoginCode(w http.ResponseWriter, r *http.Request) {
+	var req RequestLoginCodeRequest
 	if !helpers.DecodeAndValidate(w, r, &req) {
 		return
 	}
 	email := strings.TrimSpace(strings.ToLower(req.Email))
-	role := strings.TrimSpace(strings.ToLower(req.Role))
-	if role == "atendee" {
-		role = "attendee"
-	}
-	user, err := c.Service.SignUp(r.Context(), email, req.Password, req.Name, req.LastName, role)
+	err := c.Service.RequestLoginCode(r.Context(), email)
 	if err != nil {
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "already exists") {
-			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "email already registered")
-			return
-		}
-		if strings.Contains(err.Error(), "invalid email") || strings.Contains(err.Error(), "password must be") {
+		if strings.Contains(err.Error(), "invalid email") {
 			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
 			return
 		}
@@ -166,38 +149,42 @@ func (c *UserController) SignUp(w http.ResponseWriter, r *http.Request) {
 		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
-
-	helpers.WriteJSONSuccess(w, http.StatusCreated, user)
+	helpers.WriteJSONSuccess(w, http.StatusOK, nil)
 }
 
-// Login godoc
-// @Summary Log in
-// @Description Authenticate with email and password. Returns a JWT and the user. JWT contains user id, email, and roles.
+// VerifyLoginCode godoc
+// @Summary Verify login code and get token
+// @Description Exchange the one-time code for a JWT and user. Creates the user on first successful login. Returns token, token_type, and user.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body LoginRequest true "Login credentials"
+// @Param body body VerifyLoginCodeRequest true "Email and code"
 // @Success 200 {object} controllers.LoginSuccessResponse "data contains token, token_type, and user"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
-// @Router /auth/login [post]
-func (c *UserController) Login(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
+// @Router /auth/login/verify [post]
+func (c *UserController) VerifyLoginCode(w http.ResponseWriter, r *http.Request) {
+	var req VerifyLoginCodeRequest
 	if !helpers.DecodeAndValidate(w, r, &req) {
 		return
 	}
-	token, user, err := c.Service.Login(r.Context(), req.Email, req.Password)
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	code := strings.TrimSpace(req.Code)
+	token, user, err := c.Service.VerifyLoginCode(r.Context(), email, code)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid credentials") {
-			helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "invalid credentials")
+		if strings.Contains(err.Error(), "invalid or expired code") {
+			helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "invalid or expired code")
+			return
+		}
+		if strings.Contains(err.Error(), "invalid email") {
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
 			return
 		}
 		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
 		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
-
 	helpers.WriteJSONSuccess(w, http.StatusOK, LoginResponse{Token: token, TokenType: "Bearer", User: user})
 }
 

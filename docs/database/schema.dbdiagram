@@ -35,6 +35,12 @@
       "y": 16
     },
     {
+      "name": "login_codes",
+      "schemaName": "public",
+      "x": 484.731689453125,
+      "y": -276.7350725446429
+    },
+    {
       "name": "event_team_members",
       "schemaName": "public",
       "x": 984,

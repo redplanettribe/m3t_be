@@ -30,9 +30,9 @@ func NewRouter(
 	mux.HandleFunc("GET /events/{eventID}/team-members", requireAuth(scheduleController.ListEventTeamMembers))
 	mux.HandleFunc("DELETE /events/{eventID}/team-members/{userID}", requireAuth(scheduleController.RemoveEventTeamMember))
 
-	// Auth (handled by user controller)
-	mux.HandleFunc("POST /auth/signup", userController.SignUp)
-	mux.HandleFunc("POST /auth/login", userController.Login)
+	// Auth (passwordless: request code then verify)
+	mux.HandleFunc("POST /auth/login/request", userController.RequestLoginCode)
+	mux.HandleFunc("POST /auth/login/verify", userController.VerifyLoginCode)
 
 	// Users (protected)
 	mux.HandleFunc("GET /users/me", requireAuth(userController.GetMe))

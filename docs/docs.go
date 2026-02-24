@@ -15,9 +15,9 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/auth/login": {
+        "/auth/login/request": {
             "post": {
-                "description": "Authenticate with email and password. Returns a JWT and the user. JWT contains user id, email, and roles.",
+                "description": "Send a one-time login code to the given email. The code expires after a short period.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27,15 +27,61 @@ const docTemplate = `{
                 "tags": [
                     "auth"
                 ],
-                "summary": "Log in",
+                "summary": "Request a login code",
                 "parameters": [
                     {
-                        "description": "Login credentials",
+                        "description": "Email to receive the code",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/controllers.LoginRequest"
+                            "$ref": "#/definitions/controllers.RequestLoginCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "error.code: bad_request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "error.code: internal_error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login/verify": {
+            "post": {
+                "description": "Exchange the one-time code for a JWT and user. Creates the user on first successful login. Returns token, token_type, and user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify login code and get token",
+                "parameters": [
+                    {
+                        "description": "Email and code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.VerifyLoginCodeRequest"
                         }
                     }
                 ],
@@ -54,52 +100,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "error.code: unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "error.code: internal_error",
-                        "schema": {
-                            "$ref": "#/definitions/helpers.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/auth/signup": {
-            "post": {
-                "description": "Create a new user with email, password, and name. Optional role: \"admin\" or \"attendee\" (defaults to \"attendee\"). Password is stored hashed.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "Sign up a new user",
-                "parameters": [
-                    {
-                        "description": "Sign-up data",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/controllers.SignUpRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "data contains the created user",
-                        "schema": {
-                            "$ref": "#/definitions/controllers.SignUpSuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "error.code: bad_request",
                         "schema": {
                             "$ref": "#/definitions/helpers.APIResponse"
                         }
@@ -900,17 +900,6 @@ const docTemplate = `{
                 }
             }
         },
-        "controllers.LoginRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
         "controllers.LoginResponse": {
             "type": "object",
             "properties": {
@@ -955,36 +944,11 @@ const docTemplate = `{
                 }
             }
         },
-        "controllers.SignUpRequest": {
+        "controllers.RequestLoginCodeRequest": {
             "type": "object",
             "properties": {
                 "email": {
                     "type": "string"
-                },
-                "last_name": {
-                    "description": "optional",
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "role": {
-                    "description": "optional: \"admin\" or \"attendee\" (defaults to \"attendee\")",
-                    "type": "string"
-                }
-            }
-        },
-        "controllers.SignUpSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/domain.User"
-                },
-                "error": {
-                    "$ref": "#/definitions/helpers.APIError"
                 }
             }
         },
@@ -1021,6 +985,17 @@ const docTemplate = `{
                 },
                 "error": {
                     "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "controllers.VerifyLoginCodeRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
                 }
             }
         },

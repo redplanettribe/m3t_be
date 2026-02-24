@@ -95,13 +95,6 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
-  controllers.LoginRequest:
-    properties:
-      email:
-        type: string
-      password:
-        type: string
-    type: object
   controllers.LoginResponse:
     properties:
       token:
@@ -130,27 +123,10 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
-  controllers.SignUpRequest:
+  controllers.RequestLoginCodeRequest:
     properties:
       email:
         type: string
-      last_name:
-        description: optional
-        type: string
-      name:
-        type: string
-      password:
-        type: string
-      role:
-        description: 'optional: "admin" or "attendee" (defaults to "attendee")'
-        type: string
-    type: object
-  controllers.SignUpSuccessResponse:
-    properties:
-      data:
-        $ref: '#/definitions/domain.User'
-      error:
-        $ref: '#/definitions/helpers.APIError'
     type: object
   controllers.ToggleRoomNotBookableSuccessResponse:
     properties:
@@ -174,6 +150,13 @@ definitions:
         $ref: '#/definitions/domain.User'
       error:
         $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.VerifyLoginCodeRequest:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
     type: object
   domain.Event:
     properties:
@@ -280,19 +263,50 @@ info:
   title: Multi-Track Ticketing API
   version: "1.0"
 paths:
-  /auth/login:
+  /auth/login/request:
     post:
       consumes:
       - application/json
-      description: Authenticate with email and password. Returns a JWT and the user.
-        JWT contains user id, email, and roles.
+      description: Send a one-time login code to the given email. The code expires
+        after a short period.
       parameters:
-      - description: Login credentials
+      - description: Email to receive the code
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/controllers.LoginRequest'
+          $ref: '#/definitions/controllers.RequestLoginCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      summary: Request a login code
+      tags:
+      - auth
+  /auth/login/verify:
+    post:
+      consumes:
+      - application/json
+      description: Exchange the one-time code for a JWT and user. Creates the user
+        on first successful login. Returns token, token_type, and user.
+      parameters:
+      - description: Email and code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.VerifyLoginCodeRequest'
       produces:
       - application/json
       responses:
@@ -312,38 +326,7 @@ paths:
           description: 'error.code: internal_error'
           schema:
             $ref: '#/definitions/helpers.APIResponse'
-      summary: Log in
-      tags:
-      - auth
-  /auth/signup:
-    post:
-      consumes:
-      - application/json
-      description: 'Create a new user with email, password, and name. Optional role:
-        "admin" or "attendee" (defaults to "attendee"). Password is stored hashed.'
-      parameters:
-      - description: Sign-up data
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/controllers.SignUpRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: data contains the created user
-          schema:
-            $ref: '#/definitions/controllers.SignUpSuccessResponse'
-        "400":
-          description: 'error.code: bad_request'
-          schema:
-            $ref: '#/definitions/helpers.APIResponse'
-        "500":
-          description: 'error.code: internal_error'
-          schema:
-            $ref: '#/definitions/helpers.APIResponse'
-      summary: Sign up a new user
+      summary: Verify login code and get token
       tags:
       - auth
   /events:

@@ -76,10 +76,16 @@ type UserRepository interface {
 	AssignRole(ctx context.Context, userID, roleID string) error
 }
 
+// LoginCodeRepository defines the interface for one-time login code storage.
+type LoginCodeRepository interface {
+	Create(ctx context.Context, email, codeHash string, expiresAt time.Time) error
+	Consume(ctx context.Context, email, codeHash string) (consumed bool, err error)
+}
+
 // UserService defines the business logic for user profile and authentication.
 type UserService interface {
-	SignUp(ctx context.Context, email, password, name, lastName, role string) (*User, error)
-	Login(ctx context.Context, email, password string) (token string, user *User, err error)
+	RequestLoginCode(ctx context.Context, email string) error
+	VerifyLoginCode(ctx context.Context, email, code string) (token string, user *User, err error)
 	GetByID(ctx context.Context, id string) (*User, error)
 	Update(ctx context.Context, user *User) error
 }
