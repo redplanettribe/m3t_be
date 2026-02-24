@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -25,16 +26,19 @@ type userService struct {
 	passwordHasher domain.PasswordHasher
 	tokenIssuer    domain.TokenIssuer
 	tokenExpiry    time.Duration
+	emailService   domain.EmailService // optional; nil means no welcome email
 }
 
 // NewUserService creates a UserService with the given repositories and auth ports.
-func NewUserService(userRepo domain.UserRepository, roleRepo domain.RoleRepository, passwordHasher domain.PasswordHasher, tokenIssuer domain.TokenIssuer, tokenExpiry time.Duration) domain.UserService {
+// emailService is optional; pass nil to skip sending welcome email on signup.
+func NewUserService(userRepo domain.UserRepository, roleRepo domain.RoleRepository, passwordHasher domain.PasswordHasher, tokenIssuer domain.TokenIssuer, tokenExpiry time.Duration, emailService domain.EmailService) domain.UserService {
 	return &userService{
 		userRepo:       userRepo,
 		roleRepo:       roleRepo,
 		passwordHasher: passwordHasher,
 		tokenIssuer:    tokenIssuer,
 		tokenExpiry:    tokenExpiry,
+		emailService:   emailService,
 	}
 }
 
@@ -73,6 +77,17 @@ func (s *userService) SignUp(ctx context.Context, email, password, name, lastNam
 	}
 	if err := s.userRepo.AssignRole(ctx, user.ID, roleRecord.ID); err != nil {
 		return nil, fmt.Errorf("failed to assign role: %w", err)
+	}
+
+	if s.emailService != nil {
+		welcomeData := &domain.WelcomeMessageEmailData{
+			Email:     user.Email,
+			FirstName: user.Name,
+			UserID:    user.ID,
+		}
+		if err := s.emailService.SendWelcomeMessage(ctx, welcomeData); err != nil {
+			log.Printf("[USER] Failed to send welcome email: %v", err)
+		}
 	}
 
 	return user, nil

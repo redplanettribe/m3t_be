@@ -191,7 +191,7 @@ func TestUserService_GetByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeUserRepo()
 			tt.setup(fake)
-			svc := NewUserService(fake, roleRepo, hasher, issuer, tokenExpiry)
+			svc := NewUserService(fake, roleRepo, hasher, issuer, tokenExpiry, nil)
 
 			user, err := svc.GetByID(ctx, tt.id)
 
@@ -269,7 +269,7 @@ func TestUserService_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeUserRepo()
 			tt.setup(fake)
-			svc := NewUserService(fake, roleRepo, hasher, issuer, tokenExpiry)
+			svc := NewUserService(fake, roleRepo, hasher, issuer, tokenExpiry, nil)
 
 			err := svc.Update(ctx, tt.user)
 
@@ -296,7 +296,7 @@ func TestUserService_SignUp(t *testing.T) {
 	roleRepo.byCode["admin"] = domain.NewRole("role-2", "admin")
 	hasher := &fakePasswordHasher{salt: "s", hash: "h"}
 	issuer := &fakeTokenIssuer{}
-	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour)
+	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour, nil)
 
 	user, err := svc.SignUp(ctx, "alice@example.com", "password8", "Alice", "", "attendee")
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestUserService_Login(t *testing.T) {
 	roleRepo.listByUID["u1"] = []*domain.Role{domain.NewRole("r1", "attendee")}
 	hasher := &fakePasswordHasher{salt: "s", hash: "h"}
 	issuer := &fakeTokenIssuer{token: "jwt-token-123"}
-	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour)
+	svc := NewUserService(userRepo, roleRepo, hasher, issuer, time.Hour, nil)
 
 	token, user, err := svc.Login(ctx, "login@example.com", "anypassword")
 	require.NoError(t, err)

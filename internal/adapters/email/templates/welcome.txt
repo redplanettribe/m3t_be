@@ -1,0 +1,3 @@
+Hi {{.FirstName}},
+
+Welcome. We're glad you're here.
