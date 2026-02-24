@@ -1,0 +1,31 @@
+---
+description: Email layer — templates, renderer, mailer, and service
+globs: internal/domain/email.go, internal/adapters/email/**/*.go, internal/adapters/email/templates/**/*, internal/services/email.go
+alwaysApply: false
+---
+
+# Email
+
+Email sending follows clean architecture: domain defines ports; adapters implement them; the email service composes them.
+
+## Layers
+
+- **Domain** (`internal/domain/email.go`): Defines `Mailer` (Send(to, subject, html, text)), `EmailTemplateRenderer` (Render(templateName, data) → subject, htmlBody, textBody), `EmailService` interface, and email DTOs (e.g. `WelcomeMessageEmailData`). No imports from services or adapters.
+
+- **Adapter** (`internal/adapters/email/`): Implements `domain.Mailer` (SES + noop via `NewMailer(MailerConfig)`) and `domain.EmailTemplateRenderer` (embedded templates via `NewTemplateRenderer()`). Template files live in `templates/` and are embedded with `//go:embed templates/*`.
+
+- **Templates** (`internal/adapters/email/templates/`): For a template named `foo`, provide exactly three files: `foo_subject.txt`, `foo.html`, `foo.txt`. Use Go template syntax (e.g. `{{.FirstName}}`, `{{if .X}}...{{end}}`). Data passed to `Render` must have exported fields matching the template variables.
+
+- **Service** (`internal/services/email.go`): Implements `domain.EmailService`. Holds `domain.Mailer` and `domain.EmailTemplateRenderer`. Each method (e.g. `SendWelcomeMessage`) calls `renderer.Render(templateName, data)` then `mailer.Send(to, subject, htmlBody, textBody)`. Wrap errors with `fmt.Errorf(..., %w, err)`.
+
+- **Config / wiring**: Email and SES settings come from env (`config.Load` populates `cfg.Email`). In `cmd/api/main.go`, build `email.MailerConfig` from `cfg.Email`, call `email.NewMailer` and `email.NewTemplateRenderer()`, then `services.NewEmailService(mailer, templateRenderer)`.
+
+## Adding a new email type
+
+1. Add a DTO in `internal/domain/email.go` if needed (e.g. `PasswordResetEmailData`).
+2. Add or extend `domain.EmailService` with the new method (e.g. `SendPasswordResetEmail(ctx, data)`).
+3. Add template files under `internal/adapters/email/templates/<name>_subject.txt`, `<name>.html`, `<name>.txt`.
+4. Implement the method in `internal/services/email.go`: `renderer.Render("<name>", data)` then `mailer.Send(...)`.
+5. Call the new method from the appropriate place (e.g. another service); no change to `cmd` unless a new dependency is introduced.
+
+Reference: @internal/domain/email.go @internal/adapters/email/template_renderer.go @internal/adapters/email/mailer.go @internal/services/email.go
