@@ -106,3 +106,17 @@ Table user_roles {
     role_id
   }
 }
+
+Table event_registrations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  event_id uuid [not null, ref: > events.id]
+  user_id uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (event_id, user_id) [unique]
+    event_id
+    user_id
+  }
+}

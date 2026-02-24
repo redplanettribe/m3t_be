@@ -23,6 +23,7 @@ alwaysApply: false
 - Use a **request DTO** struct (e.g. `CreateEventRequest`) with only the fields the API accepts; do not decode into domain entities (id, created_at, etc. are server-generated).
 - Use `json.NewDecoder(r.Body)` and `dec.DisallowUnknownFields()` before decode so unknown fields return 400.
 - Validate required fields and format in the handler; return 400 with a clear message. Map the DTO to the domain entity before calling the service.
+- Services may assume basic validation (e.g. non-empty IDs, well-formed UUIDs/emails) has already been performed in the controller layer and should not re-validate these unless there is a domain-specific rule that cannot be enforced at the HTTP boundary.
 
 ## Swagger (swaggo)
 

@@ -56,12 +56,15 @@ func main() {
 	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
 	eventTeamMemberRepo := postgres.NewEventTeamMemberRepository(db)
+	eventRegistrationRepo := postgres.NewEventRegistrationRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	roleRepo := postgres.NewRoleRepository(db)
 	loginCodeRepo := postgres.NewLoginCodeRepository(db)
 	sessionizeFetcher := sessionize.NewHTTPFetcher(nil)
 	manageScheduleService := services.NewManageScheduleService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, sessionizeFetcher, 10*time.Second)
 	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
+	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo)
+	attendeeController := controllers.NewAttendeeController(logger, attendeeService)
 
 	jwtSecret := cfg.JWTSecret
 	if jwtSecret == "" {
@@ -96,7 +99,7 @@ func main() {
 	requireAuth := middleware.RequireAuth(jwtAuth, logger)
 
 	// 4. Router
-	mux := httpDelivery.NewRouter(scheduleController, userController, requireAuth)
+	mux := httpDelivery.NewRouter(scheduleController, userController, attendeeController, requireAuth)
 	handler := middleware.CORS(cfg.CORSOrigins, middleware.LoggingMiddleware(logger, mux))
 
 	// 5. Server

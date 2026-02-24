@@ -95,6 +95,22 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.ListMyRegisteredEventsItem:
+    properties:
+      event:
+        $ref: '#/definitions/domain.Event'
+      registration:
+        $ref: '#/definitions/domain.EventRegistration'
+    type: object
+  controllers.ListMyRegisteredEventsSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/controllers.ListMyRegisteredEventsItem'
+        type: array
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.LoginResponse:
     properties:
       token:
@@ -169,6 +185,19 @@ definitions:
       slug:
         type: string
       updated_at:
+        type: string
+    type: object
+  domain.EventRegistration:
+    properties:
+      created_at:
+        type: string
+      event_id:
+        type: string
+      id:
+        type: string
+      updated_at:
+        type: string
+      user_id:
         type: string
     type: object
   domain.EventTeamMember:
@@ -261,6 +290,68 @@ info:
   title: Multi-Track Ticketing API
   version: "1.0"
 paths:
+  /attendee/events:
+    get:
+      description: Returns the list of events the authenticated user is registered
+        for, including registration metadata.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data is an array of event + registration objects
+          schema:
+            $ref: '#/definitions/controllers.ListMyRegisteredEventsSuccessResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get events the current user is registered for
+      tags:
+      - attendee
+  /attendee/events/{eventID}/registrations:
+    post:
+      description: Registers the authenticated user as an attendee for the specified
+        event. Idempotent if already registered.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: data contains the event registration
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Register the current attendee for an event
+      tags:
+      - attendee
   /auth/login/request:
     post:
       consumes:

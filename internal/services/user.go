@@ -27,12 +27,12 @@ var (
 )
 
 type userService struct {
-	userRepo       domain.UserRepository
-	roleRepo       domain.RoleRepository
-	loginCodeRepo  domain.LoginCodeRepository
-	tokenIssuer    domain.TokenIssuer
-	tokenExpiry    time.Duration
-	emailService   domain.EmailService
+	userRepo      domain.UserRepository
+	roleRepo      domain.RoleRepository
+	loginCodeRepo domain.LoginCodeRepository
+	tokenIssuer   domain.TokenIssuer
+	tokenExpiry   time.Duration
+	emailService  domain.EmailService
 }
 
 // NewUserService creates a UserService with the given repositories and auth ports.
@@ -43,7 +43,7 @@ func NewUserService(userRepo domain.UserRepository, roleRepo domain.RoleReposito
 		loginCodeRepo: loginCodeRepo,
 		tokenIssuer:   tokenIssuer,
 		tokenExpiry:   tokenExpiry,
-		emailService: emailService,
+		emailService:  emailService,
 	}
 }
 

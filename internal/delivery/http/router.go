@@ -15,6 +15,7 @@ type AuthWrap func(http.HandlerFunc) http.HandlerFunc
 func NewRouter(
 	scheduleController *controllers.ScheduleController,
 	userController *controllers.UserController,
+	attendeeController *controllers.AttendeeController,
 	requireAuth AuthWrap,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
@@ -29,6 +30,10 @@ func NewRouter(
 	mux.HandleFunc("POST /events/{eventID}/team-members", requireAuth(scheduleController.AddEventTeamMember))
 	mux.HandleFunc("GET /events/{eventID}/team-members", requireAuth(scheduleController.ListEventTeamMembers))
 	mux.HandleFunc("DELETE /events/{eventID}/team-members/{userID}", requireAuth(scheduleController.RemoveEventTeamMember))
+
+	// Attendee-facing (protected)
+	mux.HandleFunc("POST /attendee/events/{eventID}/registrations", requireAuth(attendeeController.RegisterForEvent))
+	mux.HandleFunc("GET /attendee/events", requireAuth(attendeeController.ListMyRegisteredEvents))
 
 	// Auth (passwordless: request code then verify)
 	mux.HandleFunc("POST /auth/login/request", userController.RequestLoginCode)

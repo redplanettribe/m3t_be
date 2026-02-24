@@ -57,6 +57,12 @@
       "schemaName": "public",
       "x": 488,
       "y": 280
+    },
+    {
+      "name": "event_registrations",
+      "schemaName": "public",
+      "x": 851.4369979334144,
+      "y": 719.0712195034903
     }
   ],
   "tableGroupCollapseStates": [],
