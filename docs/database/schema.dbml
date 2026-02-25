@@ -18,7 +18,7 @@ Table rooms {
   id uuid [pk, default: `gen_random_uuid()`]
   event_id uuid [not null, ref: > events.id]
   name varchar(255) [not null]
-  sessionize_room_id int
+  source_session_id int
   not_bookable boolean [not null, default: `false`]
   capacity int
   description text
@@ -27,7 +27,7 @@ Table rooms {
   updated_at timestamptz [default: `now()`]
 
   indexes {
-    (event_id, sessionize_room_id) [unique]
+    (event_id, source_session_id) [unique]
     event_id
   }
 }

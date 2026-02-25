@@ -83,15 +83,15 @@ func (f *fakeEventRepo) Delete(ctx context.Context, id string) error {
 
 // fakeSessionRepo is an in-memory SessionRepository for tests.
 type fakeSessionRepo struct {
-	rooms               []*domain.Room
-	sessions            []*domain.Session
-	roomID              int
-	sessID              int
-	createRoomErr       error
-	createSessionErr    error
-	deleteErr           error
+	rooms                []*domain.Room
+	sessions             []*domain.Session
+	roomID               int
+	sessID               int
+	createRoomErr        error
+	createSessionErr     error
+	deleteErr            error
 	updateRoomDetailsErr error
-	deleteRoomErr       error
+	deleteRoomErr        error
 }
 
 func newFakeSessionRepo() *fakeSessionRepo {
@@ -229,11 +229,11 @@ func (f *fakeSessionRepo) ListSessionsByEventID(ctx context.Context, eventID str
 
 // fakeSessionizeFetcher returns fixed data or a configurable error.
 type fakeSessionizeFetcher struct {
-	data domain.SessionizeResponse
+	data domain.SessionFetcherResponse
 	err  error
 }
 
-func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) (domain.SessionizeResponse, error) {
+func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) (domain.SessionFetcherResponse, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -417,16 +417,16 @@ func (f *fakeEmailService) SendEventInvitation(ctx context.Context, data *domain
 }
 
 // defaultSessionizeData returns a minimal valid SessionizeResponse for tests.
-func defaultSessionizeData() domain.SessionizeResponse {
+func defaultSessionizeData() domain.SessionFetcherResponse {
 	desc := "A talk"
-	return domain.SessionizeResponse{
+	return domain.SessionFetcherResponse{
 		{
 			Date: "2025-03-01",
-			Rooms: []domain.SessionizeRoom{
+			Rooms: []domain.SessionFetcherRoom{
 				{
 					ID:   1,
 					Name: "Room A",
-					Sessions: []domain.SessionizeSession{
+					Sessions: []domain.SessionFetcherSession{
 						{
 							ID:          "s1",
 							Title:       "Talk 1",
@@ -434,9 +434,9 @@ func defaultSessionizeData() domain.SessionizeResponse {
 							StartsAt:    time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC),
 							EndsAt:      time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC),
 							RoomID:      1,
-							Categories: []domain.SessionizeCategory{
-								{Name: "Tipo de sesión", CategoryItems: []domain.SessionizeCategoryItem{{Name: "Conferencia"}}},
-								{Name: "Event tag", CategoryItems: []domain.SessionizeCategoryItem{{Name: "ai"}, {Name: "web"}}},
+							Categories: []domain.SessionCategory{
+								{Name: "Tipo de sesión", CategoryItems: []domain.TagItem{{Name: "Conferencia"}}},
+								{Name: "Event tag", CategoryItems: []domain.TagItem{{Name: "ai"}, {Name: "web"}}},
 							},
 						},
 					},
@@ -452,14 +452,14 @@ func TestEventService_CreateEvent(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		event   *domain.Event
 		wantErr bool
 		assert  func(t *testing.T, eventRepo *fakeEventRepo, event *domain.Event)
 	}{
 		{
 			name: "success",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
@@ -481,7 +481,7 @@ func TestEventService_CreateEvent(t *testing.T) {
 		},
 		{
 			name: "repo error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				er.err = errors.New("db error")
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -492,7 +492,7 @@ func TestEventService_CreateEvent(t *testing.T) {
 		},
 		{
 			name: "missing owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			event:   &domain.Event{Name: "Conf"},
@@ -525,7 +525,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID string
 		sessID  string
 		wantErr bool
@@ -533,7 +533,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 	}{
 		{
 			name: "success",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{data: defaultSessionizeData()}
 			},
 			eventID: "ev-1",
@@ -549,7 +549,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "fetcher error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{err: errors.New("fetch failed")}
 			},
 			eventID: "ev-1",
@@ -559,7 +559,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "DeleteScheduleByEventID error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				sr := newFakeSessionRepo()
 				sr.deleteErr = errors.New("delete failed")
 				return newFakeEventRepo(), sr, &fakeSessionizeFetcher{data: defaultSessionizeData()}
@@ -571,7 +571,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "CreateRoom error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				sr := newFakeSessionRepo()
 				sr.createRoomErr = errors.New("create room failed")
 				return newFakeEventRepo(), sr, &fakeSessionizeFetcher{data: defaultSessionizeData()}
@@ -583,7 +583,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 		},
 		{
 			name: "CreateSession error",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				sr := newFakeSessionRepo()
 				sr.createSessionErr = errors.New("create session failed")
 				return newFakeEventRepo(), sr, &fakeSessionizeFetcher{data: defaultSessionizeData()}
@@ -618,14 +618,14 @@ func TestEventService_ListEventsByOwner(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup   func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		ownerID string
 		wantLen int
 		assert  func(t *testing.T, events []*domain.Event)
 	}{
 		{
 			name: "returns only owner events",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				// Create two events for user-1, one for user-2
 				_ = er.Create(ctx, &domain.Event{Name: "E1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
@@ -643,7 +643,7 @@ func TestEventService_ListEventsByOwner(t *testing.T) {
 		},
 		{
 			name: "empty for unknown owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "E1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -672,7 +672,7 @@ func TestEventService_GetEventByID(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		setup        func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup        func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID      string
 		wantErr      bool
 		wantNotFound bool
@@ -680,7 +680,7 @@ func TestEventService_GetEventByID(t *testing.T) {
 	}{
 		{
 			name: "success with rooms and sessions",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				ev, _ := er.GetByID(ctx, "ev-1")
@@ -704,7 +704,7 @@ func TestEventService_GetEventByID(t *testing.T) {
 		},
 		{
 			name: "event not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
@@ -714,7 +714,7 @@ func TestEventService_GetEventByID(t *testing.T) {
 		},
 		{
 			name: "success empty rooms and sessions",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -757,7 +757,7 @@ func TestEventService_DeleteEvent(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID       string
 		ownerID       string
 		wantErr       bool
@@ -767,7 +767,7 @@ func TestEventService_DeleteEvent(t *testing.T) {
 	}{
 		{
 			name: "success",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -779,7 +779,7 @@ func TestEventService_DeleteEvent(t *testing.T) {
 		},
 		{
 			name: "event not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
@@ -789,7 +789,7 @@ func TestEventService_DeleteEvent(t *testing.T) {
 		},
 		{
 			name: "forbidden not owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -831,7 +831,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID       string
 		roomID        string
 		ownerID       string
@@ -842,7 +842,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 	}{
 		{
 			name: "success toggles false to true",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -861,7 +861,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 		},
 		{
 			name: "success toggles true to false",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -879,7 +879,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 		},
 		{
 			name: "event not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
@@ -890,7 +890,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 		},
 		{
 			name: "forbidden not owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -905,7 +905,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 		},
 		{
 			name: "room not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -918,7 +918,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 		},
 		{
 			name: "room belongs to different event",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -962,7 +962,7 @@ func TestEventService_ListEventRooms(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID       string
 		ownerID       string
 		wantErr       bool
@@ -973,7 +973,7 @@ func TestEventService_ListEventRooms(t *testing.T) {
 	}{
 		{
 			name: "success owner lists rooms",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -994,7 +994,7 @@ func TestEventService_ListEventRooms(t *testing.T) {
 		},
 		{
 			name: "event not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
@@ -1004,7 +1004,7 @@ func TestEventService_ListEventRooms(t *testing.T) {
 		},
 		{
 			name: "forbidden not owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -1016,7 +1016,7 @@ func TestEventService_ListEventRooms(t *testing.T) {
 		},
 		{
 			name: "success empty list",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -1061,7 +1061,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID       string
 		roomID        string
 		ownerID       string
@@ -1072,7 +1072,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 	}{
 		{
 			name: "success owner gets room",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1092,7 +1092,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 		},
 		{
 			name: "event not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
@@ -1103,7 +1103,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 		},
 		{
 			name: "forbidden not owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1118,7 +1118,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 		},
 		{
 			name: "room not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -1131,7 +1131,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 		},
 		{
 			name: "room belongs to different event",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1175,7 +1175,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID       string
 		roomID        string
 		ownerID       string
@@ -1190,7 +1190,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 	}{
 		{
 			name: "success update all fields",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1214,7 +1214,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 		},
 		{
 			name: "success notBookable nil keeps existing",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1236,7 +1236,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 		},
 		{
 			name: "forbidden not owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1251,7 +1251,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 		},
 		{
 			name: "room not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
@@ -1295,7 +1295,7 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
 		eventID       string
 		roomID        string
 		ownerID       string
@@ -1306,7 +1306,7 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 	}{
 		{
 			name: "success owner deletes room",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1320,7 +1320,7 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 		},
 		{
 			name: "event not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
@@ -1331,7 +1331,7 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 		},
 		{
 			name: "forbidden not owner",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
@@ -1346,7 +1346,7 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 		},
 		{
 			name: "room not found",
-			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}

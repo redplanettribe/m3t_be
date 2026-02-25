@@ -11,7 +11,7 @@ type Room struct {
 	ID               string    `json:"id"`
 	EventID          string    `json:"event_id"`
 	Name             string    `json:"name"`
-	SessionizeRoomID int       `json:"sessionize_room_id"`
+	SessionizeRoomID int       `json:"source_session_id"`
 	NotBookable      bool      `json:"not_bookable"`
 	Capacity         int       `json:"capacity"`
 	Description      string    `json:"description"`
@@ -21,12 +21,12 @@ type Room struct {
 }
 
 // NewRoom returns a new Room with the given fields. ID is typically set by the repository on create.
-// capacity, description, and howToGetThere default to 0/empty for Sessionize imports.
-func NewRoom(eventID, name string, sessionizeRoomID int, notBookable bool, capacity int, description, howToGetThere string, createdAt, updatedAt time.Time) *Room {
+// capacity, description, and howToGetThere default to 0/empty for Session imports.
+func NewRoom(eventID, name string, sessionRoomID int, notBookable bool, capacity int, description, howToGetThere string, createdAt, updatedAt time.Time) *Room {
 	return &Room{
 		EventID:          eventID,
 		Name:             name,
-		SessionizeRoomID: sessionizeRoomID,
+		SessionizeRoomID: sessionRoomID,
 		NotBookable:      notBookable,
 		Capacity:         capacity,
 		Description:      description,
@@ -39,16 +39,16 @@ func NewRoom(eventID, name string, sessionizeRoomID int, notBookable bool, capac
 // Session represents a conference session or talk
 // swagger:model Session
 type Session struct {
-	ID                  string    `json:"id"`
-	RoomID              string    `json:"room_id"`
-	SessionizeSessionID string    `json:"sessionize_session_id"`
-	Title               string    `json:"title"`
-	StartTime           time.Time `json:"start_time"`
-	EndTime             time.Time `json:"end_time"`
-	Description         string    `json:"description"`
-	Tags                []string  `json:"tags"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	RoomID          string    `json:"room_id"`
+	SourceSessionID string    `json:"source_session_id"`
+	Title           string    `json:"title"`
+	StartTime       time.Time `json:"start_time"`
+	EndTime         time.Time `json:"end_time"`
+	Description     string    `json:"description"`
+	Tags            []string  `json:"tags"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // NewSession returns a new Session with the given fields. ID is typically set by the repository on create.
@@ -58,15 +58,15 @@ func NewSession(roomID, sessionizeSessionID, title, description string, startTim
 		tags = []string{}
 	}
 	return &Session{
-		RoomID:              roomID,
-		SessionizeSessionID: sessionizeSessionID,
-		Title:               title,
-		StartTime:           startTime,
-		EndTime:             endTime,
-		Description:         description,
-		Tags:                tags,
-		CreatedAt:           createdAt,
-		UpdatedAt:           updatedAt,
+		RoomID:          roomID,
+		SourceSessionID: sessionizeSessionID,
+		Title:           title,
+		StartTime:       startTime,
+		EndTime:         endTime,
+		Description:     description,
+		Tags:            tags,
+		CreatedAt:       createdAt,
+		UpdatedAt:       updatedAt,
 	}
 }
 
@@ -81,24 +81,4 @@ type SessionRepository interface {
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
 	UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
 	DeleteRoom(ctx context.Context, roomID string) error
-}
-
-// EventService defines the business logic for managing schedule
-type EventService interface {
-	CreateEvent(ctx context.Context, event *Event) error
-	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
-	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
-	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
-	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
-	ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
-	ListEventRooms(ctx context.Context, eventID, ownerID string) ([]*Room, error)
-	GetEventRoom(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
-	UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*Room, error)
-	DeleteEventRoom(ctx context.Context, eventID, roomID, ownerID string) error
-	AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error
-	AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*EventTeamMember, error)
-	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)
-	RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error
-	SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error)
-	ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params PaginationParams) ([]*EventInvitation, int, error)
 }

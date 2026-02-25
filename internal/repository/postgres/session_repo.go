@@ -20,9 +20,9 @@ func NewSessionRepository(db *sql.DB) domain.SessionRepository {
 
 func (r *SessionRepository) CreateRoom(ctx context.Context, room *domain.Room) error {
 	query := `
-		INSERT INTO rooms (event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at)
+		INSERT INTO rooms (event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		ON CONFLICT (event_id, sessionize_room_id) DO UPDATE 
+		ON CONFLICT (event_id, source_session_id) DO UPDATE 
 		SET name = EXCLUDED.name, not_bookable = EXCLUDED.not_bookable, capacity = EXCLUDED.capacity, description = EXCLUDED.description, how_to_get_there = EXCLUDED.how_to_get_there, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
@@ -37,7 +37,7 @@ func (r *SessionRepository) CreateSession(ctx context.Context, s *domain.Session
 		SET title = EXCLUDED.title, start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, description = EXCLUDED.description, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
-	if err := r.DB.QueryRowContext(ctx, query, s.RoomID, s.SessionizeSessionID, s.Title, s.StartTime, s.EndTime, s.Description, s.CreatedAt, s.UpdatedAt).Scan(&s.ID); err != nil {
+	if err := r.DB.QueryRowContext(ctx, query, s.RoomID, s.SourceSessionID, s.Title, s.StartTime, s.EndTime, s.Description, s.CreatedAt, s.UpdatedAt).Scan(&s.ID); err != nil {
 		return err
 	}
 	// Replace tags for this session (handles both new insert and ON CONFLICT update)
@@ -60,7 +60,7 @@ func (r *SessionRepository) DeleteScheduleByEventID(ctx context.Context, eventID
 
 func (r *SessionRepository) GetRoomByID(ctx context.Context, roomID string) (*domain.Room, error) {
 	query := `
-		SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		SELECT id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 		FROM rooms
 		WHERE id = $1
 	`
@@ -77,7 +77,7 @@ func (r *SessionRepository) GetRoomByID(ctx context.Context, roomID string) (*do
 
 func (r *SessionRepository) ListRoomsByEventID(ctx context.Context, eventID string) ([]*domain.Room, error) {
 	query := `
-		SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		SELECT id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 		FROM rooms
 		WHERE event_id = $1
 		ORDER BY name
@@ -103,7 +103,7 @@ func (r *SessionRepository) SetRoomNotBookable(ctx context.Context, roomID strin
 		UPDATE rooms
 		SET not_bookable = $2, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		RETURNING id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 	`
 	room := &domain.Room{}
 	err := r.DB.QueryRowContext(ctx, query, roomID, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
@@ -121,7 +121,7 @@ func (r *SessionRepository) UpdateRoomDetails(ctx context.Context, roomID string
 		UPDATE rooms
 		SET capacity = $2, description = $3, how_to_get_there = $4, not_bookable = $5, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		RETURNING id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 	`
 	room := &domain.Room{}
 	err := r.DB.QueryRowContext(ctx, query, roomID, capacity, description, howToGetThere, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
@@ -163,7 +163,7 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 	var sessionIDs []string
 	for rows.Next() {
 		sess := &domain.Session{}
-		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SessionizeSessionID, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
 			return nil, err
 		}
 		sess.Tags = []string{}

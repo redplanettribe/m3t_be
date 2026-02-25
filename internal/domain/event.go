@@ -34,6 +34,26 @@ func NewEvent(name, eventCode, ownerID string, createdAt, updatedAt time.Time) *
 	}
 }
 
+// EventService defines the business logic for managing schedule
+type EventService interface {
+	CreateEvent(ctx context.Context, event *Event) error
+	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
+	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
+	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
+	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
+	ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
+	ListEventRooms(ctx context.Context, eventID, ownerID string) ([]*Room, error)
+	GetEventRoom(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
+	UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*Room, error)
+	DeleteEventRoom(ctx context.Context, eventID, roomID, ownerID string) error
+	AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error
+	AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*EventTeamMember, error)
+	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)
+	RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error
+	SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error)
+	ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params PaginationParams) ([]*EventInvitation, int, error)
+}
+
 // EventRepository defines the interface for event storage
 type EventRepository interface {
 	Create(ctx context.Context, event *Event) error

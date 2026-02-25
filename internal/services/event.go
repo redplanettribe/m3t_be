@@ -20,7 +20,7 @@ type eventService struct {
 	userRepo            domain.UserRepository
 	invitationRepo      domain.EventInvitationRepository
 	emailService        domain.EmailService
-	sessionize          domain.SessionizeFetcher
+	sf                  domain.SessionFetcher
 	contextTimeout      time.Duration
 }
 
@@ -30,7 +30,7 @@ func NewEventService(eventRepo domain.EventRepository,
 	userRepo domain.UserRepository,
 	invitationRepo domain.EventInvitationRepository,
 	emailService domain.EmailService,
-	sessionize domain.SessionizeFetcher,
+	sessionFetcher domain.SessionFetcher,
 	timeout time.Duration,
 ) domain.EventService {
 	return &eventService{
@@ -40,7 +40,7 @@ func NewEventService(eventRepo domain.EventRepository,
 		userRepo:            userRepo,
 		invitationRepo:      invitationRepo,
 		emailService:        emailService,
-		sessionize:          sessionize,
+		sf:                  sessionFetcher,
 		contextTimeout:      timeout,
 	}
 }
@@ -115,8 +115,8 @@ func (s *eventService) GetEventByID(ctx context.Context, eventID string) (*domai
 	return event, rooms, sessions, nil
 }
 
-// deriveTags collects all category item names from Sessionize categories, deduped.
-func deriveTags(categories []domain.SessionizeCategory) []string {
+// deriveTags collects all category item names from session categories, deduped.
+func deriveTags(categories []domain.SessionCategory) []string {
 	seen := make(map[string]struct{})
 	var out []string
 	for _, cat := range categories {
@@ -134,12 +134,12 @@ func deriveTags(categories []domain.SessionizeCategory) []string {
 	return out
 }
 
-func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
+func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string, sourceID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
-	// 1. Fetch data from Sessionize
-	sessionizeData, err := s.sessionize.Fetch(ctx, sessionizeID)
+	// 1. Fetch data from session fetcher
+	sessionData, err := s.sf.Fetch(ctx, sourceID)
 	if err != nil {
 		return err
 	}
@@ -153,14 +153,14 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	// Group rooms by ID to avoid duplicates across dates (if any)
 	uniqueRooms := make(map[int]string) // id -> name
 
-	for _, grid := range sessionizeData {
+	for _, grid := range sessionData {
 		for _, room := range grid.Rooms {
 			uniqueRooms[room.ID] = room.Name
 		}
 	}
 
 	// Insert Rooms
-	roomMap := make(map[int]string) // sessionize_id -> domain_id
+	roomMap := make(map[int]string) // source_id -> domain_id
 	for sID, name := range uniqueRooms {
 		now := time.Now()
 		r := domain.NewRoom(eventID, name, sID, false, 0, "", "", now, now)
@@ -171,7 +171,7 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	}
 
 	// Insert Sessions
-	for _, grid := range sessionizeData {
+	for _, grid := range sessionData {
 		for _, room := range grid.Rooms {
 			domainRoomID, ok := roomMap[room.ID]
 			if !ok {

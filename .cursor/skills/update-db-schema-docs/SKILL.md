@@ -36,4 +36,4 @@ Keep `docs/database/schema.dbml` in sync with the actual schema defined in `migr
 
 - One-to-many: child table has `ref: > parent_table.id`.
 - Many-to-many: junction table has two `ref: >` columns and `indexes { (id_a, id_b) [pk] }`.
-- Composite unique: `indexes { (event_id, sessionize_room_id) [unique] }`.
+- Composite unique: `indexes { (event_id, source_session_id) [unique] }`.

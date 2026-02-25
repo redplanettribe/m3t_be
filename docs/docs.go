@@ -1877,7 +1877,7 @@ const docTemplate = `{
                 "not_bookable": {
                     "type": "boolean"
                 },
-                "sessionize_room_id": {
+                "source_session_id": {
                     "type": "integer"
                 },
                 "updated_at": {
@@ -1903,7 +1903,7 @@ const docTemplate = `{
                 "room_id": {
                     "type": "string"
                 },
-                "sessionize_session_id": {
+                "source_session_id": {
                     "type": "string"
                 },
                 "start_time": {

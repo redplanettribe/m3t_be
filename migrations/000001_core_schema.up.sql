@@ -44,11 +44,11 @@ CREATE TABLE IF NOT EXISTS rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    sessionize_room_id INTEGER,
+    source_session_id INTEGER,
     not_bookable BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(event_id, sessionize_room_id)
+    UNIQUE(event_id, source_session_id)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
