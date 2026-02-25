@@ -901,6 +901,87 @@ type SendEventInvitationsSuccessResponse struct {
 	Error *helpers.APIError            `json:"error"`
 }
 
+// UpdateSessionScheduleRequest is the request body for PATCH /events/{eventID}/sessions/{sessionID}.
+// All fields are optional; omitted fields are unchanged.
+type UpdateSessionScheduleRequest struct {
+	RoomID    *string    `json:"room_id"`
+	StartTime *time.Time `json:"start_time"`
+	EndTime   *time.Time `json:"end_time"`
+}
+
+// Validate implements Validator.
+func (u UpdateSessionScheduleRequest) Validate() []string {
+	var errs []string
+	if u.RoomID != nil && strings.TrimSpace(*u.RoomID) == "" {
+		errs = append(errs, "room_id cannot be empty")
+	}
+	return errs
+}
+
+// UpdateSessionScheduleSuccessResponse is the success response envelope for PATCH /events/{eventID}/sessions/{sessionID} (200).
+type UpdateSessionScheduleSuccessResponse struct {
+	Data  *domain.Session   `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// UpdateSessionSchedule godoc
+// @Summary Update session schedule
+// @Description Moves a session to a different room and/or time slot by updating room_id, start_time, and end_time. Only the event owner can update. Optional fields omitted from body are unchanged. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Param body body UpdateSessionScheduleRequest true "Fields to update (all optional)"
+// @Success 200 {object} controllers.UpdateSessionScheduleSuccessResponse "data contains the updated session"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID} [patch]
+func (c *ScheduleController) UpdateSessionSchedule(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	if eventID == "" || sessionID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionID")
+		return
+	}
+
+	var req UpdateSessionScheduleRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	session, err := c.Service.UpdateSessionSchedule(r.Context(), eventID, sessionID, ownerID, req.RoomID, req.StartTime, req.EndTime)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event, session, or room not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+
+	helpers.WriteJSONSuccess(w, http.StatusOK, session)
+}
+
 // SendEventInvitations godoc
 // @Summary Send event invitation emails
 // @Description Send invitation emails to register for the event. Body contains a string of emails separated by commas or spaces. Only the event owner can invite. Each invitation is persisted and emailed; duplicates for the same event are skipped. Returns count of sent and list of failed addresses.

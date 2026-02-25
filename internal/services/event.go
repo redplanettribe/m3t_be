@@ -221,6 +221,94 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	return nil
 }
 
+func (s *eventService) UpdateSessionSchedule(ctx context.Context, eventID, sessionID, ownerID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get session: %w", err)
+	}
+
+	// Ensure current session belongs to this event via its room.
+	currentRoom, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if currentRoom.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+
+	newRoomID := sess.RoomID
+	if roomID != nil {
+		newRoomID = *roomID
+		// Validate new room belongs to the same event.
+		newRoom, err := s.sessionRepo.GetRoomByID(ctx, newRoomID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, domain.ErrNotFound
+			}
+			return nil, fmt.Errorf("get room: %w", err)
+		}
+		if newRoom.EventID != eventID {
+			return nil, domain.ErrNotFound
+		}
+	}
+
+	newStart := sess.StartTime
+	if startTime != nil {
+		newStart = *startTime
+	}
+	newEnd := sess.EndTime
+	if endTime != nil {
+		newEnd = *endTime
+	}
+
+	if !newEnd.After(newStart) {
+		return nil, domain.ErrInvalidInput
+	}
+
+	var roomIDArg *string
+	if roomID != nil {
+		roomIDArg = &newRoomID
+	}
+	var startArg *time.Time
+	if startTime != nil {
+		startArg = &newStart
+	}
+	var endArg *time.Time
+	if endTime != nil {
+		endArg = &newEnd
+	}
+
+	updated, err := s.sessionRepo.UpdateSessionSchedule(ctx, sessionID, roomIDArg, startArg, endArg)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("update session schedule: %w", err)
+	}
+
+	return updated, nil
+}
+
 func (s *eventService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()

@@ -75,10 +75,12 @@ type SessionRepository interface {
 	CreateRoom(ctx context.Context, room *Room) error
 	CreateSession(ctx context.Context, session *Session) error
 	DeleteScheduleByEventID(ctx context.Context, eventID string) error
+	GetSessionByID(ctx context.Context, sessionID string) (*Session, error)
 	GetRoomByID(ctx context.Context, roomID string) (*Room, error)
 	ListRoomsByEventID(ctx context.Context, eventID string) ([]*Room, error)
 	ListSessionsByEventID(ctx context.Context, eventID string) ([]*Session, error)
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
 	UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
 	DeleteRoom(ctx context.Context, roomID string) error
+	UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*Session, error)
 }

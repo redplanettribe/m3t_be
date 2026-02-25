@@ -236,6 +236,10 @@ func (f *fakeEventService) RemoveEventTeamMember(ctx context.Context, eventID, u
 	return f.removeTeamMemberErr
 }
 
+func (f *fakeEventService) UpdateSessionSchedule(ctx context.Context, eventID, sessionID, ownerID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
+	return nil, nil
+}
+
 func (f *fakeEventService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
 	f.lastSendInvitationsEventID = eventID
 	f.lastSendInvitationsOwnerID = ownerID

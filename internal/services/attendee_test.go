@@ -132,6 +132,14 @@ func (m *mockSessionRepository) UpdateRoomDetails(ctx context.Context, roomID st
 }
 func (m *mockSessionRepository) DeleteRoom(ctx context.Context, roomID string) error { return nil }
 
+func (m *mockSessionRepository) GetSessionByID(ctx context.Context, sessionID string) (*domain.Session, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockSessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
+	return nil, nil
+}
+
 func TestAttendeeService_ListMyRegisteredEvents(t *testing.T) {
 	now := time.Now()
 	event1 := &domain.Event{ID: "e1", Name: "Event 1"}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"multitrackticketing/internal/domain"
+	"time"
 
 	"github.com/lib/pq"
 )
@@ -146,6 +147,50 @@ func (r *SessionRepository) DeleteRoom(ctx context.Context, roomID string) error
 	return nil
 }
 
+func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string) (*domain.Session, error) {
+	query := `
+		SELECT id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+		FROM sessions
+		WHERE id = $1
+	`
+	sess := &domain.Session{}
+	err := r.DB.QueryRowContext(ctx, query, sessionID).Scan(
+		&sess.ID,
+		&sess.RoomID,
+		&sess.SourceSessionID,
+		&sess.Title,
+		&sess.StartTime,
+		&sess.EndTime,
+		&sess.Description,
+		&sess.CreatedAt,
+		&sess.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	sess.Tags = []string{}
+
+	rows, err := r.DB.QueryContext(ctx, `SELECT tag FROM session_tags WHERE session_id = $1`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		sess.Tags = append(sess.Tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
 func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID string) ([]*domain.Session, error) {
 	query := `
 		SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at
@@ -198,4 +243,54 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 		}
 	}
 	return sessions, nil
+}
+
+func (r *SessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
+	query := `
+		UPDATE sessions
+		SET
+			room_id = COALESCE($2, room_id),
+			start_time = COALESCE($3, start_time),
+			end_time = COALESCE($4, end_time),
+			updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+	`
+	sess := &domain.Session{}
+	err := r.DB.QueryRowContext(ctx, query, sessionID, roomID, startTime, endTime).Scan(
+		&sess.ID,
+		&sess.RoomID,
+		&sess.SourceSessionID,
+		&sess.Title,
+		&sess.StartTime,
+		&sess.EndTime,
+		&sess.Description,
+		&sess.CreatedAt,
+		&sess.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+
+	sess.Tags = []string{}
+	rows, err := r.DB.QueryContext(ctx, `SELECT tag FROM session_tags WHERE session_id = $1`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		sess.Tags = append(sess.Tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
 }

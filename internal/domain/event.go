@@ -43,6 +43,7 @@ type EventService interface {
 	CreateEvent(ctx context.Context, event *Event) error
 	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
 	UpdateEvent(ctx context.Context, eventID, ownerID string, date *time.Time, description *string, locationLat, locationLng *float64) (*Event, error)
+	UpdateSessionSchedule(ctx context.Context, eventID, sessionID, ownerID string, roomID *string, startTime, endTime *time.Time) (*Session, error)
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
 	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
 	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
