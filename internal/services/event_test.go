@@ -284,6 +284,21 @@ func (f *fakeSessionRepo) UpdateSessionSchedule(ctx context.Context, sessionID s
 	return nil, domain.ErrNotFound
 }
 
+func (f *fakeSessionRepo) UpdateSessionContent(ctx context.Context, sessionID string, title *string, description *string) (*domain.Session, error) {
+	for _, s := range f.sessions {
+		if s.ID == sessionID {
+			if title != nil {
+				s.Title = *title
+			}
+			if description != nil {
+				s.Description = *description
+			}
+			return s, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 // fakeSessionizeFetcher returns fixed data or a configurable error.
 type fakeSessionizeFetcher struct {
 	data domain.SessionFetcherResponse
@@ -2558,6 +2573,173 @@ func TestEventService_UpdateSessionSchedule(t *testing.T) {
 				}
 				if tt.wantInvalid {
 					require.True(t, errors.Is(err, domain.ErrInvalidInput))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			if tt.assert != nil {
+				tt.assert(t, got)
+			}
+		})
+	}
+}
+
+func TestEventService_UpdateSessionContent(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	type args struct {
+		eventID     string
+		sessionID   string
+		ownerID     string
+		title       *string
+		description *string
+	}
+
+	newTitle := "New Title"
+	newDesc := "New description"
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
+		args          args
+		wantErr       bool
+		wantNotFound  bool
+		wantForbidden bool
+		assert        func(t *testing.T, sess *domain.Session)
+	}{
+		{
+			name: "success title and description",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1"})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{
+					{ID: "sess-1", RoomID: "room-1", Title: "Old", Description: "Old desc"},
+				}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			args: args{
+				eventID:     "ev-1",
+				sessionID:   "sess-1",
+				ownerID:     "user-1",
+				title:       &newTitle,
+				description: &newDesc,
+			},
+			assert: func(t *testing.T, sess *domain.Session) {
+				require.NotNil(t, sess)
+				assert.Equal(t, "sess-1", sess.ID)
+				assert.Equal(t, "New Title", sess.Title)
+				assert.Equal(t, "New description", sess.Description)
+			},
+		},
+		{
+			name: "success title only",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1"})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{
+					{ID: "sess-1", RoomID: "room-1", Title: "Old", Description: "Keep"},
+				}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			args: args{
+				eventID:   "ev-1",
+				sessionID: "sess-1",
+				ownerID:   "user-1",
+				title:     &newTitle,
+			},
+			assert: func(t *testing.T, sess *domain.Session) {
+				require.NotNil(t, sess)
+				assert.Equal(t, "New Title", sess.Title)
+				assert.Equal(t, "Keep", sess.Description)
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			args: args{
+				eventID:   "ev-missing",
+				sessionID: "sess-1",
+				ownerID:   "user-1",
+				title:     &newTitle,
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1"})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			args: args{
+				eventID:   "ev-1",
+				sessionID: "sess-1",
+				ownerID:   "user-2",
+				title:     &newTitle,
+			},
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name: "session not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1"})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			args: args{
+				eventID:   "ev-1",
+				sessionID: "sess-missing",
+				ownerID:   "user-1",
+				title:     &newTitle,
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "session belongs to different event",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1"})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-99", Name: "Other"}}
+				sr.sessions = []*domain.Session{
+					{ID: "sess-1", RoomID: "room-1", Title: "Old", Description: ""},
+				}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			args: args{
+				eventID:   "ev-1",
+				sessionID: "sess-1",
+				ownerID:   "user-1",
+				title:     &newTitle,
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			got, err := svc.UpdateSessionContent(ctx, tt.args.eventID, tt.args.sessionID, tt.args.ownerID, tt.args.title, tt.args.description)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
 				}
 				return
 			}

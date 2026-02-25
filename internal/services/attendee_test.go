@@ -143,6 +143,10 @@ func (m *mockSessionRepository) UpdateSessionSchedule(ctx context.Context, sessi
 	return nil, nil
 }
 
+func (m *mockSessionRepository) UpdateSessionContent(ctx context.Context, sessionID string, title *string, description *string) (*domain.Session, error) {
+	return nil, nil
+}
+
 func TestAttendeeService_ListMyRegisteredEvents(t *testing.T) {
 	now := time.Now()
 	event1 := &domain.Event{ID: "e1", Name: "Event 1"}

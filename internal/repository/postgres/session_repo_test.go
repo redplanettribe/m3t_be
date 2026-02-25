@@ -770,3 +770,126 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionRepository_UpdateSessionContent(t *testing.T) {
+	ctx := context.Background()
+	startTime := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)
+	endTime := time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC)
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		sessionID    string
+		title        *string
+		description  *string
+		mock         func(mock sqlmock.Sqlmock)
+		wantTitle    string
+		wantDesc     string
+		wantErr      bool
+		wantNotFound bool
+	}{
+		{
+			name:        "success title and description",
+			sessionID:   "sess-1",
+			title:       strPtr("New Title"),
+			description: strPtr("New description"),
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"id", "room_id", "sessionize_session_id", "title", "start_time", "end_time", "description", "created_at", "updated_at"}).
+					AddRow("sess-1", "room-1", "src-1", "New Title", startTime, endTime, "New description", createdAt, updatedAt)
+				mock.ExpectQuery(`UPDATE sessions`).
+					WithArgs("sess-1", "New Title", "New description").
+					WillReturnRows(rows)
+				mock.ExpectQuery(`SELECT tag FROM session_tags WHERE session_id`).
+					WithArgs("sess-1").
+					WillReturnRows(sqlmock.NewRows([]string{"tag"}))
+			},
+			wantTitle: "New Title",
+			wantDesc:  "New description",
+		},
+		{
+			name:   "success title only",
+			sessionID: "sess-1",
+			title:  strPtr("Only Title"),
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"id", "room_id", "sessionize_session_id", "title", "start_time", "end_time", "description", "created_at", "updated_at"}).
+					AddRow("sess-1", "room-1", "src-1", "Only Title", startTime, endTime, "unchanged", createdAt, updatedAt)
+				mock.ExpectQuery(`UPDATE sessions`).
+					WithArgs("sess-1", "Only Title", nil).
+					WillReturnRows(rows)
+				mock.ExpectQuery(`SELECT tag FROM session_tags WHERE session_id`).
+					WithArgs("sess-1").
+					WillReturnRows(sqlmock.NewRows([]string{"tag"}).AddRow("ai").AddRow("web"))
+			},
+			wantTitle: "Only Title",
+			wantDesc:  "unchanged",
+		},
+		{
+			name:        "success description only",
+			sessionID:   "sess-1",
+			description: strPtr("Only description"),
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"id", "room_id", "sessionize_session_id", "title", "start_time", "end_time", "description", "created_at", "updated_at"}).
+					AddRow("sess-1", "room-1", "src-1", "Old Title", startTime, endTime, "Only description", createdAt, updatedAt)
+				mock.ExpectQuery(`UPDATE sessions`).
+					WithArgs("sess-1", nil, "Only description").
+					WillReturnRows(rows)
+				mock.ExpectQuery(`SELECT tag FROM session_tags WHERE session_id`).
+					WithArgs("sess-1").
+					WillReturnRows(sqlmock.NewRows([]string{"tag"}))
+			},
+			wantTitle: "Old Title",
+			wantDesc:  "Only description",
+		},
+		{
+			name:      "not found",
+			sessionID: "sess-missing",
+			title:     strPtr("X"),
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE sessions`).
+					WithArgs("sess-missing", "X", nil).
+					WillReturnError(sql.ErrNoRows)
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name:      "db error on update",
+			sessionID: "sess-1",
+			title:     strPtr("X"),
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE sessions`).
+					WithArgs("sess-1", "X", nil).
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			got, err := repo.UpdateSessionContent(ctx, tt.sessionID, tt.title, tt.description)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.Equal(t, tt.wantTitle, got.Title)
+			require.Equal(t, tt.wantDesc, got.Description)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func strPtr(s string) *string {
+	return &s
+}

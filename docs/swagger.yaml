@@ -264,6 +264,20 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.UpdateSessionContentRequest:
+    properties:
+      description:
+        type: string
+      title:
+        type: string
+    type: object
+  controllers.UpdateSessionContentSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Session'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.UpdateSessionScheduleRequest:
     properties:
       end_time:
@@ -1330,6 +1344,61 @@ paths:
       security:
       - BearerAuth: []
       summary: Update session schedule
+      tags:
+      - events
+  /events/{eventID}/sessions/{sessionID}/content:
+    patch:
+      consumes:
+      - application/json
+      description: Updates a session's title and/or description. Only the event owner
+        can update. Optional fields omitted from body are unchanged. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Session ID (UUID)
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: Fields to update (all optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.UpdateSessionContentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the updated session
+          schema:
+            $ref: '#/definitions/controllers.UpdateSessionContentSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update session content
       tags:
       - events
   /events/{eventID}/team-members:

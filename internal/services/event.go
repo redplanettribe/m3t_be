@@ -309,6 +309,51 @@ func (s *eventService) UpdateSessionSchedule(ctx context.Context, eventID, sessi
 	return updated, nil
 }
 
+func (s *eventService) UpdateSessionContent(ctx context.Context, eventID, sessionID, ownerID string, title *string, description *string) (*domain.Session, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get session: %w", err)
+	}
+
+	currentRoom, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if currentRoom.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+
+	updated, err := s.sessionRepo.UpdateSessionContent(ctx, sessionID, title, description)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("update session content: %w", err)
+	}
+
+	return updated, nil
+}
+
 func (s *eventService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()

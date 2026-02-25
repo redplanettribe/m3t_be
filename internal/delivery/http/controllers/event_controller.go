@@ -982,6 +982,82 @@ func (c *ScheduleController) UpdateSessionSchedule(w http.ResponseWriter, r *htt
 	helpers.WriteJSONSuccess(w, http.StatusOK, session)
 }
 
+// UpdateSessionContentRequest is the request body for PATCH /events/{eventID}/sessions/{sessionID}/content.
+// All fields are optional; omitted fields are unchanged.
+type UpdateSessionContentRequest struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+}
+
+// Validate implements Validator.
+func (u UpdateSessionContentRequest) Validate() []string {
+	var errs []string
+	if u.Title != nil && strings.TrimSpace(*u.Title) == "" {
+		errs = append(errs, "title cannot be empty")
+	}
+	return errs
+}
+
+// UpdateSessionContentSuccessResponse is the success response envelope for PATCH /events/{eventID}/sessions/{sessionID}/content (200).
+type UpdateSessionContentSuccessResponse struct {
+	Data  *domain.Session   `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// UpdateSessionContent godoc
+// @Summary Update session content
+// @Description Updates a session's title and/or description. Only the event owner can update. Optional fields omitted from body are unchanged. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Param body body UpdateSessionContentRequest true "Fields to update (all optional)"
+// @Success 200 {object} controllers.UpdateSessionContentSuccessResponse "data contains the updated session"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID}/content [patch]
+func (c *ScheduleController) UpdateSessionContent(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	if eventID == "" || sessionID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionID")
+		return
+	}
+
+	var req UpdateSessionContentRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	session, err := c.Service.UpdateSessionContent(r.Context(), eventID, sessionID, ownerID, req.Title, req.Description)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or session not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+
+	helpers.WriteJSONSuccess(w, http.StatusOK, session)
+}
+
 // DeleteEventSession godoc
 // @Summary Delete a session
 // @Description Deletes a session. Only the event owner can delete. Requires authentication.

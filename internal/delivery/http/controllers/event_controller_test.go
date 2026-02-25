@@ -96,6 +96,14 @@ type fakeEventService struct {
 	lastDeleteEventSessionEventID   string
 	lastDeleteEventSessionSessionID string
 	lastDeleteEventSessionOwnerID   string
+	// UpdateSessionContent
+	updateSessionContentErr    error
+	updateSessionContentResult *domain.Session
+	lastUpdateSessionContentEventID   string
+	lastUpdateSessionContentSessionID string
+	lastUpdateSessionContentOwnerID   string
+	lastUpdateSessionContentTitle     *string
+	lastUpdateSessionContentDesc      *string
 	// UpdateEvent
 	updateEventErr          error
 	updateEventResult       *domain.Event
@@ -250,6 +258,18 @@ func (f *fakeEventService) RemoveEventTeamMember(ctx context.Context, eventID, u
 
 func (f *fakeEventService) UpdateSessionSchedule(ctx context.Context, eventID, sessionID, ownerID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
 	return nil, nil
+}
+
+func (f *fakeEventService) UpdateSessionContent(ctx context.Context, eventID, sessionID, ownerID string, title *string, description *string) (*domain.Session, error) {
+	f.lastUpdateSessionContentEventID = eventID
+	f.lastUpdateSessionContentSessionID = sessionID
+	f.lastUpdateSessionContentOwnerID = ownerID
+	f.lastUpdateSessionContentTitle = title
+	f.lastUpdateSessionContentDesc = description
+	if f.updateSessionContentErr != nil {
+		return nil, f.updateSessionContentErr
+	}
+	return f.updateSessionContentResult, nil
 }
 
 func (f *fakeEventService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
@@ -1247,6 +1267,134 @@ func TestScheduleController_DeleteEventSession(t *testing.T) {
 				dataBytes, _ := json.Marshal(envelope.Data)
 				require.NoError(t, json.Unmarshal(dataBytes, &data))
 				assert.Equal(t, "deleted", data.Status)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_UpdateSessionContent(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		sessionID      string
+		body           string
+		noUserContext  bool
+		fakeErr        error
+		fakeResult     *domain.Session
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			sessionID:  "sess-1",
+			body:       `{"title":"New Title","description":"New desc"}`,
+			fakeResult: &domain.Session{ID: "sess-1", Title: "New Title", Description: "New desc"},
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastUpdateSessionContentEventID)
+				assert.Equal(t, "sess-1", fake.lastUpdateSessionContentSessionID)
+				assert.Equal(t, "user-123", fake.lastUpdateSessionContentOwnerID)
+				require.NotNil(t, fake.lastUpdateSessionContentTitle)
+				assert.Equal(t, "New Title", *fake.lastUpdateSessionContentTitle)
+				require.NotNil(t, fake.lastUpdateSessionContentDesc)
+				assert.Equal(t, "New desc", *fake.lastUpdateSessionContentDesc)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			sessionID:      "sess-1",
+			body:           `{"title":"X"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or sessionID",
+		},
+		{
+			name:           "missing sessionID",
+			eventID:        "ev-1",
+			sessionID:      "",
+			body:           `{"title":"X"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or sessionID",
+		},
+		{
+			name:           "empty title",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{"title":""}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "title cannot be empty",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{"title":"X"}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			sessionID:      "sess-1",
+			body:           `{"title":"X"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event or session not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{"title":"X"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "service error",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{"title":"X"}`,
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{updateSessionContentErr: tt.fakeErr, updateSessionContentResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/sessions/" + tt.sessionID + "/content"
+			req := httptest.NewRequest(http.MethodPatch, path, bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if tt.sessionID != "" {
+				req.SetPathValue("sessionID", tt.sessionID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.UpdateSessionContent(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				require.Nil(t, envelope.Error)
+				tt.checkCall(t, fake)
+				var data domain.Session
+				dataBytes, _ := json.Marshal(envelope.Data)
+				require.NoError(t, json.Unmarshal(dataBytes, &data))
+				assert.Equal(t, "New Title", data.Title)
+				assert.Equal(t, "New desc", data.Description)
 			}
 			if tt.wantBodySubstr != "" && envelope.Error != nil {
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)

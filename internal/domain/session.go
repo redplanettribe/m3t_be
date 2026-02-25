@@ -84,4 +84,5 @@ type SessionRepository interface {
 	DeleteRoom(ctx context.Context, roomID string) error
 	DeleteSession(ctx context.Context, sessionID string) error
 	UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*Session, error)
+	UpdateSessionContent(ctx context.Context, sessionID string, title *string, description *string) (*Session, error)
 }

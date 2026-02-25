@@ -306,3 +306,52 @@ func (r *SessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID
 
 	return sess, nil
 }
+
+func (r *SessionRepository) UpdateSessionContent(ctx context.Context, sessionID string, title *string, description *string) (*domain.Session, error) {
+	query := `
+		UPDATE sessions
+		SET
+			title = COALESCE($2, title),
+			description = COALESCE($3, description),
+			updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+	`
+	sess := &domain.Session{}
+	err := r.DB.QueryRowContext(ctx, query, sessionID, title, description).Scan(
+		&sess.ID,
+		&sess.RoomID,
+		&sess.SourceSessionID,
+		&sess.Title,
+		&sess.StartTime,
+		&sess.EndTime,
+		&sess.Description,
+		&sess.CreatedAt,
+		&sess.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+
+	sess.Tags = []string{}
+	rows, err := r.DB.QueryContext(ctx, `SELECT tag FROM session_tags WHERE session_id = $1`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		sess.Tags = append(sess.Tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}

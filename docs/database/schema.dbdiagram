@@ -7,25 +7,25 @@
     {
       "name": "events",
       "schemaName": "public",
-      "x": 488,
+      "x": 504,
       "y": 288
     },
     {
       "name": "rooms",
       "schemaName": "public",
-      "x": 984,
+      "x": 1000,
       "y": 288
     },
     {
       "name": "sessions",
       "schemaName": "public",
-      "x": 1472,
+      "x": 1496,
       "y": 288
     },
     {
       "name": "session_tags",
       "schemaName": "public",
-      "x": 2000,
+      "x": 2016,
       "y": 288
     },
     {
@@ -43,7 +43,7 @@
     {
       "name": "event_team_members",
       "schemaName": "public",
-      "x": 984,
+      "x": 1000,
       "y": 896
     },
     {
@@ -55,19 +55,19 @@
     {
       "name": "user_roles",
       "schemaName": "public",
-      "x": 488,
-      "y": 560
+      "x": 529.544677734375,
+      "y": 715.9033816425118
     },
     {
       "name": "event_registrations",
       "schemaName": "public",
-      "x": 984,
+      "x": 1000,
       "y": 1040
     },
     {
       "name": "event_invitations",
       "schemaName": "public",
-      "x": 984,
+      "x": 1000,
       "y": 688
     }
   ],
