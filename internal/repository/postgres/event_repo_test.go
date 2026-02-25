@@ -80,6 +80,9 @@ func TestEventRepository_Create(t *testing.T) {
 
 func TestEventRepository_GetByID(t *testing.T) {
 	ctx := context.Background()
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	cols := []string{"id", "name", "event_code", "owner_id", "created_at", "updated_at", "date", "description", "location_lat", "location_lng"}
 
 	tests := []struct {
 		name    string
@@ -92,18 +95,18 @@ func TestEventRepository_GetByID(t *testing.T) {
 			name: "success",
 			id:   "ev-1",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("ev-1").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "event_code", "owner_id", "created_at", "updated_at"}).
-						AddRow("ev-1", "Conf", "ABCD", "user-1", time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)))
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "ABCD", "user-1", createdAt, updatedAt, nil, nil, nil, nil))
 			},
 			want: &domain.Event{
 				ID:        "ev-1",
 				Name:      "Conf",
 				EventCode: "ABCD",
 				OwnerID:   "user-1",
-				CreatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-				UpdatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			},
 			wantErr: false,
 		},
@@ -111,7 +114,7 @@ func TestEventRepository_GetByID(t *testing.T) {
 			name: "not found",
 			id:   "ev-missing",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("ev-missing").
 					WillReturnError(sql.ErrNoRows)
 			},
@@ -144,6 +147,9 @@ func TestEventRepository_GetByID(t *testing.T) {
 
 func TestEventRepository_GetByEventCode(t *testing.T) {
 	ctx := context.Background()
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	cols := []string{"id", "name", "event_code", "owner_id", "created_at", "updated_at", "date", "description", "location_lat", "location_lng"}
 
 	tests := []struct {
 		name      string
@@ -157,18 +163,18 @@ func TestEventRepository_GetByEventCode(t *testing.T) {
 			name:      "success",
 			eventCode: "abcd",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("abcd").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "event_code", "owner_id", "created_at", "updated_at"}).
-						AddRow("ev-1", "Conf", "abcd", "user-1", time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)))
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "abcd", "user-1", createdAt, updatedAt, nil, nil, nil, nil))
 			},
 			want: &domain.Event{
 				ID:        "ev-1",
 				Name:      "Conf",
 				EventCode: "abcd",
 				OwnerID:   "user-1",
-				CreatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-				UpdatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			},
 			wantErr: false,
 		},
@@ -176,18 +182,18 @@ func TestEventRepository_GetByEventCode(t *testing.T) {
 			name:      "success normalizes to lowercase",
 			eventCode: "ABCD",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("abcd").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "event_code", "owner_id", "created_at", "updated_at"}).
-						AddRow("ev-1", "Conf", "abcd", "user-1", time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)))
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "abcd", "user-1", createdAt, updatedAt, nil, nil, nil, nil))
 			},
 			want: &domain.Event{
 				ID:        "ev-1",
 				Name:      "Conf",
 				EventCode: "abcd",
 				OwnerID:   "user-1",
-				CreatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-				UpdatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			},
 			wantErr: false,
 		},
@@ -195,7 +201,7 @@ func TestEventRepository_GetByEventCode(t *testing.T) {
 			name:      "not found",
 			eventCode: "none",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("none").
 					WillReturnError(sql.ErrNoRows)
 			},
@@ -207,7 +213,7 @@ func TestEventRepository_GetByEventCode(t *testing.T) {
 			name:      "db error",
 			eventCode: "abcd",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("abcd").
 					WillReturnError(sql.ErrConnDone)
 			},
@@ -243,6 +249,11 @@ func TestEventRepository_GetByEventCode(t *testing.T) {
 
 func TestEventRepository_ListByOwnerID(t *testing.T) {
 	ctx := context.Background()
+	createdAt1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	createdAt2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+	updatedAt2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+	cols := []string{"id", "name", "event_code", "owner_id", "created_at", "updated_at", "date", "description", "location_lat", "location_lng"}
 
 	tests := []struct {
 		name    string
@@ -255,16 +266,16 @@ func TestEventRepository_ListByOwnerID(t *testing.T) {
 			name:    "success multiple",
 			ownerID: "user-1",
 			mock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"id", "name", "event_code", "owner_id", "created_at", "updated_at"}).
-					AddRow("ev-1", "Conf A", "ABCD", "user-1", time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)).
-					AddRow("ev-2", "Conf B", "WXYZ", "user-1", time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC))
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				rows := sqlmock.NewRows(cols).
+					AddRow("ev-1", "Conf A", "ABCD", "user-1", createdAt1, updatedAt1, nil, nil, nil, nil).
+					AddRow("ev-2", "Conf B", "WXYZ", "user-1", createdAt2, updatedAt2, nil, nil, nil, nil)
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("user-1").
 					WillReturnRows(rows)
 			},
 			want: []*domain.Event{
-				{ID: "ev-1", Name: "Conf A", EventCode: "ABCD", OwnerID: "user-1", CreatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
-				{ID: "ev-2", Name: "Conf B", EventCode: "WXYZ", OwnerID: "user-1", CreatedAt: time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)},
+				{ID: "ev-1", Name: "Conf A", EventCode: "ABCD", OwnerID: "user-1", CreatedAt: createdAt1, UpdatedAt: updatedAt1},
+				{ID: "ev-2", Name: "Conf B", EventCode: "WXYZ", OwnerID: "user-1", CreatedAt: createdAt2, UpdatedAt: updatedAt2},
 			},
 			wantErr: false,
 		},
@@ -272,9 +283,9 @@ func TestEventRepository_ListByOwnerID(t *testing.T) {
 			name:    "success empty",
 			ownerID: "user-none",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("user-none").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "name", "event_code", "owner_id", "created_at", "updated_at"}))
+					WillReturnRows(sqlmock.NewRows(cols))
 			},
 			want:    []*domain.Event{},
 			wantErr: false,
@@ -283,7 +294,7 @@ func TestEventRepository_ListByOwnerID(t *testing.T) {
 			name:    "db error",
 			ownerID: "user-1",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
 					WithArgs("user-1").
 					WillReturnError(sql.ErrConnDone)
 			},
@@ -377,6 +388,166 @@ func TestEventRepository_Delete(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestEventRepository_Update(t *testing.T) {
+	ctx := context.Background()
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	eventDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	desc := "Annual conf"
+	lat, lng := 40.7128, -74.0060
+	cols := []string{"id", "name", "event_code", "owner_id", "created_at", "updated_at", "date", "description", "location_lat", "location_lng"}
+
+	tests := []struct {
+		name        string
+		eventID     string
+		date        *time.Time
+		description *string
+		locationLat *float64
+		locationLng *float64
+		mock        func(mock sqlmock.Sqlmock)
+		want        *domain.Event
+		wantErr     bool
+		isNotFound  bool
+	}{
+		{
+			name:        "update date only",
+			eventID:     "ev-1",
+			date:        &eventDate,
+			description: nil,
+			locationLat: nil,
+			locationLng: nil,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE events SET updated_at = NOW\(\), date = \$1`).
+					WithArgs(eventDate, "ev-1").
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "ABCD", "user-1", createdAt, updatedAt, eventDate, nil, nil, nil))
+			},
+			want: &domain.Event{
+				ID:        "ev-1",
+				Name:      "Conf",
+				EventCode: "ABCD",
+				OwnerID:   "user-1",
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+				Date:      &eventDate,
+			},
+			wantErr: false,
+		},
+		{
+			name:        "update description only",
+			eventID:     "ev-1",
+			date:        nil,
+			description: &desc,
+			locationLat: nil,
+			locationLng: nil,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE events SET updated_at = NOW\(\), description = \$1`).
+					WithArgs("Annual conf", "ev-1").
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "ABCD", "user-1", createdAt, updatedAt, nil, desc, nil, nil))
+			},
+			want: &domain.Event{
+				ID:          "ev-1",
+				Name:        "Conf",
+				EventCode:   "ABCD",
+				OwnerID:     "user-1",
+				CreatedAt:   createdAt,
+				UpdatedAt:   updatedAt,
+				Description: &desc,
+			},
+			wantErr: false,
+		},
+		{
+			name:        "update location only",
+			eventID:     "ev-1",
+			date:        nil,
+			description: nil,
+			locationLat: &lat,
+			locationLng: &lng,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE events SET updated_at = NOW\(\), location_lat = \$1, location_lng = \$2`).
+					WithArgs(40.7128, -74.006, "ev-1").
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "ABCD", "user-1", createdAt, updatedAt, nil, nil, 40.7128, -74.006))
+			},
+			want: &domain.Event{
+				ID:          "ev-1",
+				Name:        "Conf",
+				EventCode:   "ABCD",
+				OwnerID:     "user-1",
+				CreatedAt:   createdAt,
+				UpdatedAt:   updatedAt,
+				LocationLat: &lat,
+				LocationLng: &lng,
+			},
+			wantErr: false,
+		},
+		{
+			name:        "no fields to update calls GetByID",
+			eventID:     "ev-1",
+			date:        nil,
+			description: nil,
+			locationLat: nil,
+			locationLng: nil,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`SELECT id, name, event_code, owner_id, created_at, updated_at, date, description, location_lat, location_lng`).
+					WithArgs("ev-1").
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow("ev-1", "Conf", "ABCD", "user-1", createdAt, updatedAt, nil, nil, nil, nil))
+			},
+			want: &domain.Event{
+				ID:        "ev-1",
+				Name:      "Conf",
+				EventCode: "ABCD",
+				OwnerID:   "user-1",
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			wantErr: false,
+		},
+		{
+			name:        "not found",
+			eventID:     "ev-missing",
+			date:        &eventDate,
+			description: nil,
+			locationLat: nil,
+			locationLng: nil,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE events SET`).
+					WithArgs(eventDate, "ev-missing").
+					WillReturnError(sql.ErrNoRows)
+			},
+			want:       nil,
+			wantErr:    true,
+			isNotFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			tt.mock(mock)
+			repo := NewEventRepository(db)
+			got, err := repo.Update(ctx, tt.eventID, tt.date, tt.description, tt.locationLat, tt.locationLng)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Nil(t, got)
+				if tt.isNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				require.NoError(t, mock.ExpectationsWereMet())
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}

@@ -23,6 +23,7 @@ func NewRouter(
 	// Event management (protected)
 	mux.HandleFunc("GET /events/me", requireAuth(scheduleController.ListMyEvents))
 	mux.HandleFunc("GET /events/{eventID}", requireAuth(scheduleController.GetEventByID))
+	mux.HandleFunc("PATCH /events/{eventID}", requireAuth(scheduleController.UpdateEvent))
 	mux.HandleFunc("POST /events", requireAuth(scheduleController.CreateEvent))
 	mux.HandleFunc("DELETE /events/{eventID}", requireAuth(scheduleController.DeleteEvent))
 	mux.HandleFunc("PATCH /events/{eventID}/rooms/{roomID}/not-bookable", requireAuth(scheduleController.ToggleRoomNotBookable))

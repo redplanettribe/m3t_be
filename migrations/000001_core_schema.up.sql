@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS events (
     name VARCHAR(255) NOT NULL,
     event_code CHAR(4) NOT NULL UNIQUE,
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    date TIMESTAMP WITH TIME ZONE,
+    description TEXT,
+    location_lat DOUBLE PRECISION,
+    location_lng DOUBLE PRECISION,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -46,6 +50,9 @@ CREATE TABLE IF NOT EXISTS rooms (
     name VARCHAR(255) NOT NULL,
     source_session_id INTEGER,
     not_bookable BOOLEAN NOT NULL DEFAULT false,
+    capacity INTEGER,
+    description TEXT,
+    how_to_get_there TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(event_id, source_session_id)

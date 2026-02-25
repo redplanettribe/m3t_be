@@ -133,6 +133,80 @@ func (c *ScheduleController) GetEventByID(w http.ResponseWriter, r *http.Request
 	helpers.WriteJSONSuccess(w, http.StatusOK, GetEventByIDResponse{Event: event, Rooms: rooms, Sessions: sessions})
 }
 
+// UpdateEventRequest is the request body for PATCH /events/{eventID}. All fields optional; omitted fields are unchanged.
+type UpdateEventRequest struct {
+	Date         *time.Time `json:"date"`
+	Description  *string    `json:"description"`
+	LocationLat  *float64   `json:"location_lat"`
+	LocationLng  *float64   `json:"location_lng"`
+}
+
+// Validate implements Validator. Optional bounds for lat (-90..90) and lng (-180..180).
+func (u UpdateEventRequest) Validate() []string {
+	var errs []string
+	if u.LocationLat != nil && (*u.LocationLat < -90 || *u.LocationLat > 90) {
+		errs = append(errs, "location_lat must be between -90 and 90")
+	}
+	if u.LocationLng != nil && (*u.LocationLng < -180 || *u.LocationLng > 180) {
+		errs = append(errs, "location_lng must be between -180 and 180")
+	}
+	return errs
+}
+
+// UpdateEventSuccessResponse is the success response envelope for PATCH /events/{eventID} (200).
+type UpdateEventSuccessResponse struct {
+	Data  *domain.Event     `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// UpdateEvent godoc
+// @Summary Update event details
+// @Description Updates event date, description, and location (lat/lng). Only the event owner can update. Optional fields omitted from body are unchanged. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body UpdateEventRequest true "Fields to update (all optional)"
+// @Success 200 {object} controllers.UpdateEventSuccessResponse "data contains the updated event"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID} [patch]
+func (c *ScheduleController) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	var req UpdateEventRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	event, err := c.Service.UpdateEvent(r.Context(), eventID, ownerID, req.Date, req.Description, req.LocationLat, req.LocationLng)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, event)
+}
+
 // ImportSessionizeResponse is the data payload for POST /events/{eventID}/import/sessionize/{sessionizeID} (200).
 type ImportSessionizeResponse struct {
 	Status string `json:"status"`

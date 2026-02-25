@@ -79,6 +79,17 @@ func (m *mockEventRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (m *mockEventRepository) Update(ctx context.Context, eventID string, date *time.Time, description *string, locationLat, locationLng *float64) (*domain.Event, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	ev, ok := m.events[eventID]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	return ev, nil
+}
+
 func TestAttendeeService_ListMyRegisteredEvents(t *testing.T) {
 	now := time.Now()
 	event1 := &domain.Event{ID: "e1", Name: "Event 1"}

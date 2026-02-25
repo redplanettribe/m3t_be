@@ -115,6 +115,30 @@ func (s *eventService) GetEventByID(ctx context.Context, eventID string) (*domai
 	return event, rooms, sessions, nil
 }
 
+func (s *eventService) UpdateEvent(ctx context.Context, eventID, ownerID string, date *time.Time, description *string, locationLat, locationLng *float64) (*domain.Event, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	updated, err := s.eventRepo.Update(ctx, eventID, date, description, locationLat, locationLng)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("update event: %w", err)
+	}
+	return updated, nil
+}
+
 // deriveTags collects all category item names from session categories, deduped.
 func deriveTags(categories []domain.SessionCategory) []string {
 	seen := make(map[string]struct{})

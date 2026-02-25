@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/delivery/http/middleware"
@@ -90,6 +91,11 @@ type fakeEventService struct {
 	lastDeleteEventRoomEventID string
 	lastDeleteEventRoomRoomID  string
 	lastDeleteEventRoomOwnerID string
+	// UpdateEvent
+	updateEventErr          error
+	updateEventResult       *domain.Event
+	lastUpdateEventID       string
+	lastUpdateEventOwnerID  string
 }
 
 func (f *fakeEventService) CreateEvent(ctx context.Context, event *domain.Event) error {
@@ -135,6 +141,15 @@ func (f *fakeEventService) DeleteEvent(ctx context.Context, eventID string, owne
 	f.lastDeleteEventID = eventID
 	f.lastDeleteOwnerID = ownerID
 	return f.deleteEventErr
+}
+
+func (f *fakeEventService) UpdateEvent(ctx context.Context, eventID, ownerID string, date *time.Time, description *string, locationLat, locationLng *float64) (*domain.Event, error) {
+	f.lastUpdateEventID = eventID
+	f.lastUpdateEventOwnerID = ownerID
+	if f.updateEventErr != nil {
+		return nil, f.updateEventErr
+	}
+	return f.updateEventResult, nil
 }
 
 func (f *fakeEventService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
@@ -1199,6 +1214,128 @@ func TestScheduleController_DeleteEvent(t *testing.T) {
 				dataBytes, _ := json.Marshal(envelope.Data)
 				require.NoError(t, json.Unmarshal(dataBytes, &data))
 				assert.Equal(t, "deleted", data.Status)
+			}
+			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
+				require.NotNil(t, envelope.Error, "error response must have error set")
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr, "error message")
+			}
+		})
+	}
+}
+
+func TestScheduleController_UpdateEvent(t *testing.T) {
+	eventDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	desc := "Annual conference"
+	lat, lng := 40.7128, -74.0060
+	updatedEvent := &domain.Event{
+		ID: "ev-123", Name: "Conf", EventCode: "abc1", OwnerID: "user-123",
+		Date: &eventDate, Description: &desc, LocationLat: &lat, LocationLng: &lng,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+
+	tests := []struct {
+		name           string
+		eventID        string
+		body           string
+		noUserContext  bool
+		fakeErr        error
+		fakeResult     *domain.Event
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-123",
+			body:       `{"description":"Annual conference"}`,
+			fakeResult: updatedEvent,
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-123", fake.lastUpdateEventID)
+				assert.Equal(t, "user-123", fake.lastUpdateEventOwnerID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			body:           `{}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-123",
+			body:           `{}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			body:           `{"description":"x"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden not owner",
+			eventID:        "ev-123",
+			body:           `{"description":"x"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "validation invalid location_lat",
+			eventID:        "ev-123",
+			body:           `{"location_lat": 100}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "location_lat",
+		},
+		{
+			name:           "service error",
+			eventID:        "ev-123",
+			body:           `{}`,
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{updateEventErr: tt.fakeErr, updateEventResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			var body bytes.Buffer
+			if tt.body != "" {
+				body = *bytes.NewBufferString(tt.body)
+			}
+			req := httptest.NewRequest(http.MethodPatch, "http://test/events/"+tt.eventID, &body)
+			req.Header.Set("Content-Type", "application/json")
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.UpdateEvent(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code, "status code")
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope), "response must be valid JSON envelope")
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				require.Nil(t, envelope.Error, "success response must have error nil")
+				tt.checkCall(t, fake)
+				dataBytes, _ := json.Marshal(envelope.Data)
+				var event domain.Event
+				require.NoError(t, json.Unmarshal(dataBytes, &event))
+				assert.Equal(t, "ev-123", event.ID)
+				if tt.fakeResult != nil && tt.fakeResult.Description != nil {
+					require.NotNil(t, event.Description)
+					assert.Equal(t, *tt.fakeResult.Description, *event.Description)
+				}
 			}
 			if tt.wantStatus != http.StatusOK && tt.wantBodySubstr != "" {
 				require.NotNil(t, envelope.Error, "error response must have error set")

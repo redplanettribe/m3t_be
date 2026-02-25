@@ -8,6 +8,10 @@ Table events {
   owner_id uuid [not null, ref: > users.id]
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
+  date timestamptz
+  description text
+  location_lat double
+  location_lng double
 
   indexes {
     owner_id

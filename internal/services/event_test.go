@@ -81,6 +81,26 @@ func (f *fakeEventRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (f *fakeEventRepo) Update(ctx context.Context, eventID string, date *time.Time, description *string, locationLat, locationLng *float64) (*domain.Event, error) {
+	e, ok := f.byID[eventID]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	if date != nil {
+		e.Date = date
+	}
+	if description != nil {
+		e.Description = description
+	}
+	if locationLat != nil {
+		e.LocationLat = locationLat
+	}
+	if locationLng != nil {
+		e.LocationLng = locationLng
+	}
+	return e, nil
+}
+
 // fakeSessionRepo is an in-memory SessionRepository for tests.
 type fakeSessionRepo struct {
 	rooms                []*domain.Room
@@ -515,6 +535,120 @@ func TestEventService_CreateEvent(t *testing.T) {
 			fe, ok := eventRepo.(*fakeEventRepo)
 			require.True(t, ok)
 			tt.assert(t, fe, ev)
+		})
+	}
+}
+
+func TestEventService_UpdateEvent(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+	eventDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	desc := "Annual conference"
+	lat, lng := 40.7128, -74.0060
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
+		eventID       string
+		ownerID       string
+		date          *time.Time
+		description   *string
+		locationLat   *float64
+		locationLng   *float64
+		wantErr       bool
+		wantNotFound  bool
+		wantForbidden bool
+		assert        func(t *testing.T, event *domain.Event)
+	}{
+		{
+			name: "success owner updates date and description",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:     "ev-1",
+			ownerID:     "user-1",
+			date:        &eventDate,
+			description: &desc,
+			locationLat: nil,
+			locationLng: nil,
+			assert: func(t *testing.T, event *domain.Event) {
+				require.NotNil(t, event)
+				require.NotNil(t, event.Date)
+				assert.True(t, event.Date.Equal(eventDate))
+				require.NotNil(t, event.Description)
+				assert.Equal(t, desc, *event.Description)
+			},
+		},
+		{
+			name: "success owner updates location",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:     "ev-1",
+			ownerID:     "user-1",
+			date:        nil,
+			description: nil,
+			locationLat: &lat,
+			locationLng: &lng,
+			assert: func(t *testing.T, event *domain.Event) {
+				require.NotNil(t, event)
+				require.NotNil(t, event.LocationLat)
+				assert.InDelta(t, lat, *event.LocationLat, 1e-6)
+				require.NotNil(t, event.LocationLng)
+				assert.InDelta(t, lng, *event.LocationLng, 1e-6)
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-missing",
+			ownerID:     "user-1",
+			date:        &eventDate,
+			wantErr:     true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			ownerID:       "user-2",
+			date:          &eventDate,
+			wantErr:       true,
+			wantForbidden: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			got, err := svc.UpdateEvent(ctx, tt.eventID, tt.ownerID, tt.date, tt.description, tt.locationLat, tt.locationLng)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Nil(t, got)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			if tt.assert != nil {
+				tt.assert(t, got)
+			}
 		})
 	}
 }
