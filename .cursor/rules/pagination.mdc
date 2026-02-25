@@ -1,0 +1,75 @@
+---
+description: Offset-based pagination convention for list API endpoints
+globs: "internal/**/*.go"
+alwaysApply: false
+---
+
+# Pagination
+
+Use **offset-based pagination** for list endpoints that return potentially large collections (e.g. invited emails, registrations). This keeps responses bounded and allows clients to request specific pages.
+
+## Query parameters
+
+- **page** (optional): 1-based page number. Default: `1`. Invalid or missing uses default.
+- **page_size** (optional): Number of items per page. Default: `20`, max: `100`. Invalid or missing uses default; values above max are clamped to `100`.
+
+Example: `GET /events/{eventID}/invitations?page=2&page_size=10`
+
+## Filtering / search
+
+List endpoints may support optional **filter** query parameters (e.g. `search` for substring matching on a field such as email):
+
+- **Handler**: Read the param from the query string (e.g. `strings.TrimSpace(r.URL.Query().Get("search"))`), pass as a plain `string` (or other type) through the service to the repository. Filter parameters are **separate** from `PaginationParams` so pagination stays generic.
+- **Repository**: Apply the same filter in both the COUNT query and the SELECT query (same WHERE clause including the filter). For substring search use **`ILIKE`** with an escaped pattern: escape `%` and `_` in user input so they match literally, then wrap in `%` for substring match (e.g. `%` + escapedSearch + `%`). Use parameterized queries; do not concatenate raw input into SQL.
+
+Example: `GET /events/{eventID}/invitations?search=alice&page=1&page_size=20`
+
+## Domain
+
+- **`domain.PaginationParams`** ([internal/domain/pagination.go](internal/domain/pagination.go)): Holds `Page` and `PageSize`. Method **`Offset() int`** returns `(Page - 1) * PageSize` for use in SQL `OFFSET`.
+- Repositories that support pagination accept `PaginationParams` and return **`(items, totalCount, error)`** so the API can expose total count and total pages.
+
+## HTTP layer
+
+- **`helpers.ParsePagination(r *http.Request) domain.PaginationParams`** ([internal/delivery/http/helpers/pagination.go](internal/delivery/http/helpers/pagination.go)): Reads `page` and `page_size` from the query string, clamps to valid range, returns `PaginationParams`. Use in handlers for paginated list endpoints.
+- **`helpers.PaginationMeta`**: Struct with `Page`, `PageSize`, `Total`, `TotalPages` (JSON-tagged for response).
+- **`helpers.NewPaginationMeta(page, pageSize, total int) PaginationMeta`**: Builds metadata; `TotalPages` is computed as ceiling(total / pageSize).
+
+## Response shape
+
+Paginated list responses use the standard `APIResponse` envelope with **`data`** containing:
+
+- **`items`**: Array of the current page of items.
+- **`pagination`**: Object with `page`, `page_size`, `total`, `total_pages`.
+
+Example:
+
+```json
+{
+  "data": {
+    "items": [...],
+    "pagination": { "page": 1, "page_size": 20, "total": 57, "total_pages": 3 }
+  },
+  "error": null
+}
+```
+
+Define a response DTO per endpoint (e.g. `ListEventInvitationsResponse`) with `Items` and `Pagination` fields; document it in swaggo and reference it in `@Success`.
+
+## Repository pattern
+
+- Run a **COUNT** query with the same filters (including any search/filter) as the list query, no LIMIT/OFFSET.
+- Run the list query with **`ORDER BY`** (stable ordering), **`LIMIT $n`** = `params.PageSize`, **`OFFSET $m`** = `params.Offset()`. Use the same WHERE clause as the COUNT so total matches the filtered result set.
+- Return `(slice, total, nil)` or `(nil, 0, err)`.
+
+## Service
+
+- Accept `params domain.PaginationParams` and any filter args (e.g. `search string`) in the list method; pass through to the repository. No business logic on pagination or search itself; only enforce auth (e.g. owner-only) then call repo and return `(items, total, err)`.
+
+## Reference
+
+- [internal/domain/pagination.go](internal/domain/pagination.go) — `PaginationParams`
+- [internal/delivery/http/helpers/pagination.go](internal/delivery/http/helpers/pagination.go) — parsing and `PaginationMeta`
+- [internal/domain/event_invitation.go](internal/domain/event_invitation.go) — repository interface with paginated `ListByEventID`
+- [internal/repository/postgres/event_invitation_repo.go](internal/repository/postgres/event_invitation_repo.go) — COUNT + LIMIT/OFFSET implementation
+- [internal/delivery/http/controllers/schedule_controller.go](internal/delivery/http/controllers/schedule_controller.go) — `ListEventInvitations` handler (parse params, build paginated response)

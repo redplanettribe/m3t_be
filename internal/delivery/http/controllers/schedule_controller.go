@@ -491,6 +491,69 @@ func (c *ScheduleController) RemoveEventTeamMember(w http.ResponseWriter, r *htt
 	helpers.WriteJSONSuccess(w, http.StatusOK, RemoveEventTeamMemberResponse{Status: "removed"})
 }
 
+// ListEventInvitationsResponse is the data payload for GET /events/{eventID}/invitations (200).
+type ListEventInvitationsResponse struct {
+	Items      []*domain.EventInvitation `json:"items"`
+	Pagination helpers.PaginationMeta    `json:"pagination"`
+}
+
+// ListEventInvitationsSuccessResponse is the success response envelope for GET /events/{eventID}/invitations (200).
+type ListEventInvitationsSuccessResponse struct {
+	Data  ListEventInvitationsResponse `json:"data"`
+	Error *helpers.APIError            `json:"error"`
+}
+
+// ListEventInvitations godoc
+// @Summary List invited emails for an event
+// @Description Returns a paginated list of emails invited to the event (with id and sent_at). Only the event owner can list. Use page and page_size query params. Optional search filters by email substring (case-insensitive). Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param search query string false "Filter emails containing this string (case-insensitive)"
+// @Param page query int false "Page number (default 1)"
+// @Param page_size query int false "Page size (default 20, max 100)"
+// @Success 200 {object} controllers.ListEventInvitationsSuccessResponse "data contains items and pagination"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/invitations [get]
+func (c *ScheduleController) ListEventInvitations(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	callerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	params := helpers.ParsePagination(r)
+	list, total, err := c.Service.ListEventInvitations(r.Context(), eventID, callerID, search, params)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if list == nil {
+		list = []*domain.EventInvitation{}
+	}
+	meta := helpers.NewPaginationMeta(params.Page, params.PageSize, total)
+	helpers.WriteJSONSuccess(w, http.StatusOK, ListEventInvitationsResponse{Items: list, Pagination: meta})
+}
+
 // SendEventInvitationsRequest is the request body for POST /events/{eventID}/invitations.
 // Emails is a long string of emails separated by commas or spaces.
 type SendEventInvitationsRequest struct {

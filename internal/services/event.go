@@ -339,6 +339,30 @@ func (s *eventService) ListEventTeamMembers(ctx context.Context, eventID, caller
 	return members, nil
 }
 
+func (s *eventService) ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params domain.PaginationParams) ([]*domain.EventInvitation, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, 0, domain.ErrNotFound
+		}
+		return nil, 0, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != callerID {
+		return nil, 0, domain.ErrForbidden
+	}
+	invs, total, err := s.invitationRepo.ListByEventID(ctx, eventID, search, params)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list event invitations: %w", err)
+	}
+	if invs == nil {
+		invs = []*domain.EventInvitation{}
+	}
+	return invs, total, nil
+}
+
 func (s *eventService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()

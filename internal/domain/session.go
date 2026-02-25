@@ -87,4 +87,5 @@ type EventService interface {
 	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)
 	RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error
 	SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error)
+	ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params PaginationParams) ([]*EventInvitation, int, error)
 }

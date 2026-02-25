@@ -75,6 +75,22 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.ListEventInvitationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.EventInvitation'
+        type: array
+      pagination:
+        $ref: '#/definitions/helpers.PaginationMeta'
+    type: object
+  controllers.ListEventInvitationsSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.ListEventInvitationsResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.ListEventTeamMembersSuccessResponse:
     properties:
       data:
@@ -206,6 +222,17 @@ definitions:
       updated_at:
         type: string
     type: object
+  domain.EventInvitation:
+    properties:
+      email:
+        type: string
+      event_id:
+        type: string
+      id:
+        type: string
+      sent_at:
+        type: string
+    type: object
   domain.EventRegistration:
     properties:
       created_at:
@@ -301,6 +328,17 @@ definitions:
       data: {}
       error:
         $ref: '#/definitions/helpers.APIError'
+    type: object
+  helpers.PaginationMeta:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
     type: object
 host: localhost:8080
 info:
@@ -583,6 +621,61 @@ paths:
       tags:
       - events
   /events/{eventID}/invitations:
+    get:
+      description: Returns a paginated list of emails invited to the event (with id
+        and sent_at). Only the event owner can list. Use page and page_size query
+        params. Optional search filters by email substring (case-insensitive). Requires
+        authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Filter emails containing this string (case-insensitive)
+        in: query
+        name: search
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 20, max 100)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains items and pagination
+          schema:
+            $ref: '#/definitions/controllers.ListEventInvitationsSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List invited emails for an event
+      tags:
+      - events
     post:
       consumes:
       - application/json

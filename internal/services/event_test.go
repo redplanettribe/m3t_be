@@ -319,17 +319,34 @@ func (f *fakeEventInvitationRepo) Create(ctx context.Context, inv *domain.EventI
 	return nil
 }
 
-func (f *fakeEventInvitationRepo) ListByEventID(ctx context.Context, eventID string) ([]*domain.EventInvitation, error) {
+func (f *fakeEventInvitationRepo) ListByEventID(ctx context.Context, eventID string, search string, params domain.PaginationParams) ([]*domain.EventInvitation, int, error) {
 	var out []*domain.EventInvitation
 	for _, inv := range f.invitations {
-		if inv.EventID == eventID {
-			out = append(out, inv)
+		if inv.EventID != eventID {
+			continue
 		}
+		if search != "" && !strings.Contains(strings.ToLower(inv.Email), strings.ToLower(search)) {
+			continue
+		}
+		out = append(out, inv)
 	}
 	if out == nil {
-		return []*domain.EventInvitation{}, nil
+		out = []*domain.EventInvitation{}
 	}
-	return out, nil
+	total := len(out)
+	offset := params.Offset()
+	if offset > total {
+		offset = total
+	}
+	end := offset + params.PageSize
+	if end > total {
+		end = total
+	}
+	page := out[offset:end]
+	if page == nil {
+		page = []*domain.EventInvitation{}
+	}
+	return page, total, nil
 }
 
 // fakeEmailService is a test double for EmailService. Tracks SendEventInvitation calls; other methods no-op.
@@ -1087,6 +1104,126 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 	}
 }
 
+func TestEventService_ListEventInvitations(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		eventID       string
+		callerID      string
+		search        string
+		params        domain.PaginationParams
+		setupEvent    func(*fakeEventRepo)
+		setupInvitation func(*fakeEventInvitationRepo)
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		wantCount     int
+		wantTotal     int
+	}{
+		{
+			name:     "owner lists invitations non-empty",
+			eventID:  "ev-1",
+			callerID: "user-1",
+			search:   "",
+			params:   domain.PaginationParams{Page: 1, PageSize: 20},
+			setupEvent: func(er *fakeEventRepo) {
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+			},
+			setupInvitation: func(ir *fakeEventInvitationRepo) {
+				_ = ir.Create(ctx, &domain.EventInvitation{EventID: "ev-1", Email: "a@example.com", SentAt: time.Now()})
+				_ = ir.Create(ctx, &domain.EventInvitation{EventID: "ev-1", Email: "b@example.com", SentAt: time.Now()})
+			},
+			wantErr:   false,
+			wantCount: 2,
+			wantTotal: 2,
+		},
+		{
+			name:     "owner lists empty",
+			eventID:  "ev-1",
+			callerID: "user-1",
+			search:   "",
+			params:   domain.PaginationParams{Page: 1, PageSize: 20},
+			setupEvent: func(er *fakeEventRepo) {
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+			},
+			setupInvitation: func(*fakeEventInvitationRepo) {},
+			wantErr:   false,
+			wantCount: 0,
+			wantTotal: 0,
+		},
+		{
+			name:     "owner lists with search filter",
+			eventID:  "ev-1",
+			callerID: "user-1",
+			search:   "example",
+			params:   domain.PaginationParams{Page: 1, PageSize: 20},
+			setupEvent: func(er *fakeEventRepo) {
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+			},
+			setupInvitation: func(ir *fakeEventInvitationRepo) {
+				_ = ir.Create(ctx, &domain.EventInvitation{EventID: "ev-1", Email: "a@example.com", SentAt: time.Now()})
+				_ = ir.Create(ctx, &domain.EventInvitation{EventID: "ev-1", Email: "b@example.com", SentAt: time.Now()})
+				_ = ir.Create(ctx, &domain.EventInvitation{EventID: "ev-1", Email: "c@other.com", SentAt: time.Now()})
+			},
+			wantErr:   false,
+			wantCount: 2,
+			wantTotal: 2,
+		},
+		{
+			name:     "forbidden not owner",
+			eventID:  "ev-1",
+			callerID: "user-other",
+			search:   "",
+			params:   domain.PaginationParams{Page: 1, PageSize: 20},
+			setupEvent: func(er *fakeEventRepo) {
+				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+			},
+			setupInvitation: func(*fakeEventInvitationRepo) {},
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name:         "event not found",
+			eventID:      "ev-missing",
+			callerID:     "user-1",
+			search:       "",
+			params:       domain.PaginationParams{Page: 1, PageSize: 20},
+			setupEvent:   func(er *fakeEventRepo) {},
+			setupInvitation: func(*fakeEventInvitationRepo) {},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo := newFakeEventRepo()
+			tt.setupEvent(eventRepo)
+			invRepo := newFakeEventInvitationRepo()
+			if tt.setupInvitation != nil {
+				tt.setupInvitation(invRepo)
+			}
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), invRepo, newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			got, total, err := svc.ListEventInvitations(ctx, tt.eventID, tt.callerID, tt.search, tt.params)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, got, tt.wantCount)
+			require.Equal(t, tt.wantTotal, total)
+		})
+	}
+}
+
 func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
@@ -1411,7 +1548,7 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 			require.Equal(t, tt.wantSent, sent)
 			require.ElementsMatch(t, tt.wantFailed, failed)
 			if tt.wantSent > 0 && len(tt.emails) > 0 {
-				list, _ := invRepo.ListByEventID(ctx, tt.eventID)
+				list, _, _ := invRepo.ListByEventID(ctx, tt.eventID, "", domain.PaginationParams{Page: 1, PageSize: 1000})
 				require.Len(t, list, tt.wantSent, "invitations persisted should match sent count")
 				require.Len(t, emailSvc.sentInvitations, tt.wantSent, "emails sent should match sent count")
 			}

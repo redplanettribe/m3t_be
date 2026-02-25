@@ -63,6 +63,14 @@ type fakeManageScheduleService struct {
 	lastSendInvitationsEventID string
 	lastSendInvitationsOwnerID string
 	lastSendInvitationsEmails  []string
+	// ListEventInvitations
+	listEventInvitationsErr    error
+	listEventInvitationsResult []*domain.EventInvitation
+	listEventInvitationsTotal  int
+	lastListInvitationsEventID  string
+	lastListInvitationsCallerID string
+	lastListInvitationsSearch   string
+	lastListInvitationsParams   domain.PaginationParams
 }
 
 func (f *fakeManageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
@@ -163,6 +171,20 @@ func (f *fakeManageScheduleService) SendEventInvitations(ctx context.Context, ev
 		return 0, nil, f.sendEventInvitationsErr
 	}
 	return f.sendEventInvitationsSent, f.sendEventInvitationsFailed, nil
+}
+
+func (f *fakeManageScheduleService) ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params domain.PaginationParams) ([]*domain.EventInvitation, int, error) {
+	f.lastListInvitationsEventID = eventID
+	f.lastListInvitationsCallerID = callerID
+	f.lastListInvitationsSearch = search
+	f.lastListInvitationsParams = params
+	if f.listEventInvitationsErr != nil {
+		return nil, 0, f.listEventInvitationsErr
+	}
+	if f.listEventInvitationsResult != nil {
+		return f.listEventInvitationsResult, f.listEventInvitationsTotal, nil
+	}
+	return []*domain.EventInvitation{}, 0, nil
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -1000,6 +1022,169 @@ func TestScheduleController_RemoveEventTeamMember(t *testing.T) {
 				assert.Equal(t, tt.eventID, fake.lastRemoveTeamMemberEventID)
 				assert.Equal(t, tt.userID, fake.lastRemoveTeamMemberUserID)
 				assert.Equal(t, "user-123", fake.lastRemoveTeamMemberOwnerID)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_ListEventInvitations(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		query          string
+		fakeErr        error
+		fakeResult     []*domain.EventInvitation
+		fakeTotal      int
+		wantStatus     int
+		wantBodySubstr string
+		noUserContext  bool
+		checkCall      func(t *testing.T, fake *fakeManageScheduleService)
+		checkData      func(t *testing.T, data ListEventInvitationsResponse)
+	}{
+		{
+			name:       "success with invitations default pagination",
+			eventID:    "ev-1",
+			fakeResult: []*domain.EventInvitation{{ID: "inv-1", EventID: "ev-1", Email: "a@example.com"}, {ID: "inv-2", EventID: "ev-1", Email: "b@example.com"}},
+			fakeTotal:  2,
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+				assert.Equal(t, "ev-1", fake.lastListInvitationsEventID)
+				assert.Equal(t, "user-123", fake.lastListInvitationsCallerID)
+				assert.Equal(t, 1, fake.lastListInvitationsParams.Page)
+				assert.Equal(t, 20, fake.lastListInvitationsParams.PageSize)
+			},
+			checkData: func(t *testing.T, data ListEventInvitationsResponse) {
+				require.Len(t, data.Items, 2)
+				assert.Equal(t, "a@example.com", data.Items[0].Email)
+				assert.Equal(t, "b@example.com", data.Items[1].Email)
+				assert.Equal(t, 1, data.Pagination.Page)
+				assert.Equal(t, 20, data.Pagination.PageSize)
+				assert.Equal(t, 2, data.Pagination.Total)
+				assert.Equal(t, 1, data.Pagination.TotalPages)
+			},
+		},
+		{
+			name:       "success with explicit page and page_size",
+			eventID:    "ev-1",
+			query:      "?page=2&page_size=5",
+			fakeResult: []*domain.EventInvitation{},
+			fakeTotal:  10,
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+				assert.Equal(t, 2, fake.lastListInvitationsParams.Page)
+				assert.Equal(t, 5, fake.lastListInvitationsParams.PageSize)
+			},
+			checkData: func(t *testing.T, data ListEventInvitationsResponse) {
+				require.Len(t, data.Items, 0)
+				assert.Equal(t, 2, data.Pagination.Page)
+				assert.Equal(t, 5, data.Pagination.PageSize)
+				assert.Equal(t, 10, data.Pagination.Total)
+				assert.Equal(t, 2, data.Pagination.TotalPages)
+			},
+		},
+		{
+			name:       "success empty list",
+			eventID:    "ev-1",
+			fakeResult: []*domain.EventInvitation{},
+			fakeTotal:  0,
+			wantStatus: http.StatusOK,
+			checkData: func(t *testing.T, data ListEventInvitationsResponse) {
+				require.Len(t, data.Items, 0)
+				assert.Equal(t, 0, data.Pagination.Total)
+				assert.Equal(t, 0, data.Pagination.TotalPages)
+			},
+		},
+		{
+			name:       "success with search param",
+			eventID:    "ev-1",
+			query:      "?search=alice",
+			fakeResult: []*domain.EventInvitation{{ID: "inv-1", EventID: "ev-1", Email: "alice@example.com"}},
+			fakeTotal:  1,
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+				assert.Equal(t, "alice", fake.lastListInvitationsSearch)
+			},
+			checkData: func(t *testing.T, data ListEventInvitationsResponse) {
+				require.Len(t, data.Items, 1)
+				assert.Equal(t, "alice@example.com", data.Items[0].Email)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-1",
+			noUserContext: true,
+			wantStatus:   http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "service error",
+			eventID:        "ev-1",
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{
+				listEventInvitationsErr:    tt.fakeErr,
+				listEventInvitationsResult: tt.fakeResult,
+				listEventInvitationsTotal:  tt.fakeTotal,
+			}
+			ctrl := NewScheduleController(testLogger, fake)
+			url := "http://test/events/" + tt.eventID + "/invitations"
+			if tt.query != "" {
+				url += tt.query
+			}
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.ListEventInvitations(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK {
+				require.Nil(t, envelope.Error)
+				if tt.checkCall != nil {
+					tt.checkCall(t, fake)
+				}
+				if tt.checkData != nil {
+					dataBytes, err := json.Marshal(envelope.Data)
+					require.NoError(t, err)
+					var data ListEventInvitationsResponse
+					require.NoError(t, json.Unmarshal(dataBytes, &data))
+					tt.checkData(t, data)
+				}
 			}
 			if tt.wantBodySubstr != "" && envelope.Error != nil {
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)

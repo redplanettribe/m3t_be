@@ -17,5 +17,5 @@ type EventInvitation struct {
 // EventInvitationRepository defines storage operations for event invitations.
 type EventInvitationRepository interface {
 	Create(ctx context.Context, inv *EventInvitation) error
-	ListByEventID(ctx context.Context, eventID string) ([]*EventInvitation, error)
+	ListByEventID(ctx context.Context, eventID string, search string, params PaginationParams) ([]*EventInvitation, int, error)
 }
