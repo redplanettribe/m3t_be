@@ -163,7 +163,7 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	roomMap := make(map[int]string) // sessionize_id -> domain_id
 	for sID, name := range uniqueRooms {
 		now := time.Now()
-		r := domain.NewRoom(eventID, name, sID, false, now, now)
+		r := domain.NewRoom(eventID, name, sID, false, 0, "", "", now, now)
 		if err := s.sessionRepo.CreateRoom(ctx, r); err != nil {
 			return fmt.Errorf("failed to create room %s: %w", name, err)
 		}
@@ -257,6 +257,128 @@ func (s *eventService) ToggleRoomNotBookable(ctx context.Context, eventID, roomI
 		return nil, fmt.Errorf("set room not_bookable: %w", err)
 	}
 	return updated, nil
+}
+
+func (s *eventService) ListEventRooms(ctx context.Context, eventID, ownerID string) ([]*domain.Room, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	rooms, err := s.sessionRepo.ListRoomsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list rooms: %w", err)
+	}
+	if rooms == nil {
+		rooms = []*domain.Room{}
+	}
+	return rooms, nil
+}
+
+func (s *eventService) GetEventRoom(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, roomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+	return room, nil
+}
+
+func (s *eventService) UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*domain.Room, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, roomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+	finalNotBookable := room.NotBookable
+	if notBookable != nil {
+		finalNotBookable = *notBookable
+	}
+	updated, err := s.sessionRepo.UpdateRoomDetails(ctx, roomID, capacity, description, howToGetThere, finalNotBookable)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("update room details: %w", err)
+	}
+	return updated, nil
+}
+
+func (s *eventService) DeleteEventRoom(ctx context.Context, eventID, roomID, ownerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, roomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	if err := s.sessionRepo.DeleteRoom(ctx, roomID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("delete room: %w", err)
+	}
+	return nil
 }
 
 func (s *eventService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {

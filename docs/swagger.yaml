@@ -36,6 +36,13 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.DeleteRoomSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.DeleteEventResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.GetEventByIDResponse:
     properties:
       event:
@@ -60,6 +67,13 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/domain.User'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.GetRoomSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Room'
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
@@ -121,6 +135,15 @@ definitions:
       data:
         items:
           $ref: '#/definitions/controllers.ListMyRegisteredEventsItem'
+        type: array
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.ListRoomsSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/domain.Room'
         type: array
       error:
         $ref: '#/definitions/helpers.APIError'
@@ -192,6 +215,24 @@ definitions:
         $ref: '#/definitions/helpers.APIError'
     type: object
   controllers.ToggleRoomNotBookableSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Room'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.UpdateRoomRequest:
+    properties:
+      capacity:
+        type: integer
+      description:
+        type: string
+      how_to_get_there:
+        type: string
+      not_bookable:
+        type: boolean
+    type: object
+  controllers.UpdateRoomSuccessResponse:
     properties:
       data:
         $ref: '#/definitions/domain.Room'
@@ -273,9 +314,15 @@ definitions:
     type: object
   domain.Room:
     properties:
+      capacity:
+        type: integer
       created_at:
         type: string
+      description:
+        type: string
       event_id:
+        type: string
+      how_to_get_there:
         type: string
       id:
         type: string
@@ -788,6 +835,197 @@ paths:
       security:
       - BearerAuth: []
       summary: Send event invitation emails
+      tags:
+      - events
+  /events/{eventID}/rooms:
+    get:
+      description: Returns the list of rooms for the event. Only the event owner can
+        list. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data is an array of rooms
+          schema:
+            $ref: '#/definitions/controllers.ListRoomsSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List rooms for an event
+      tags:
+      - events
+  /events/{eventID}/rooms/{roomID}:
+    delete:
+      description: Deletes a room and its sessions. Only the event owner can delete.
+        Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Room ID (UUID)
+        in: path
+        name: roomID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains status
+          schema:
+            $ref: '#/definitions/controllers.DeleteRoomSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a room
+      tags:
+      - events
+    get:
+      description: Returns a single room for the event. Only the event owner can access.
+        Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Room ID (UUID)
+        in: path
+        name: roomID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the room
+          schema:
+            $ref: '#/definitions/controllers.GetRoomSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a room by ID
+      tags:
+      - events
+    patch:
+      consumes:
+      - application/json
+      description: Updates room details (capacity, description, how_to_get_there,
+        not_bookable). Only the event owner can update. Optional fields omitted from
+        body are unchanged (not_bookable keeps current value when omitted). Requires
+        authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Room ID (UUID)
+        in: path
+        name: roomID
+        required: true
+        type: string
+      - description: Room fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.UpdateRoomRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the updated room
+          schema:
+            $ref: '#/definitions/controllers.UpdateRoomSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a room
       tags:
       - events
   /events/{eventID}/rooms/{roomID}/not-bookable:

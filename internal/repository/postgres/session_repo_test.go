@@ -33,12 +33,15 @@ func TestSessionRepository_CreateRoom(t *testing.T) {
 				Name:             "Room A",
 				SessionizeRoomID: 1,
 				NotBookable:      false,
+				Capacity:         0,
+				Description:      "",
+				HowToGetThere:    "",
 				CreatedAt:        createdAt,
 				UpdatedAt:        updatedAt,
 			},
 			mock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectQuery(`INSERT INTO rooms`).
-					WithArgs("ev-1", "Room A", 1, false, createdAt, updatedAt).
+					WithArgs("ev-1", "Room A", 1, false, 0, "", "", createdAt, updatedAt).
 					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("room-uuid-1"))
 			},
 			wantID:  "room-uuid-1",
@@ -51,6 +54,9 @@ func TestSessionRepository_CreateRoom(t *testing.T) {
 				Name:             "Room B",
 				SessionizeRoomID: 2,
 				NotBookable:      false,
+				Capacity:         0,
+				Description:      "",
+				HowToGetThere:    "",
 				CreatedAt:        createdAt,
 				UpdatedAt:        updatedAt,
 			},
@@ -255,10 +261,10 @@ func TestSessionRepository_ListRoomsByEventID(t *testing.T) {
 			name:    "success two rooms",
 			eventID: "ev-1",
 			mock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "created_at", "updated_at"}).
-					AddRow("room-1", "ev-1", "Room A", 1, false, createdAt, updatedAt).
-					AddRow("room-2", "ev-1", "Room B", 2, true, createdAt, updatedAt)
-				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at`).
+				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "capacity", "description", "how_to_get_there", "created_at", "updated_at"}).
+					AddRow("room-1", "ev-1", "Room A", 1, false, 0, "", "", createdAt, updatedAt).
+					AddRow("room-2", "ev-1", "Room B", 2, true, 0, "", "", createdAt, updatedAt)
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at`).
 					WithArgs("ev-1").
 					WillReturnRows(rows)
 			},
@@ -269,9 +275,9 @@ func TestSessionRepository_ListRoomsByEventID(t *testing.T) {
 			name:    "success empty",
 			eventID: "ev-2",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at`).
 					WithArgs("ev-2").
-					WillReturnRows(sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "created_at", "updated_at"}))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "capacity", "description", "how_to_get_there", "created_at", "updated_at"}))
 			},
 			wantLen: 0,
 			wantErr: false,
@@ -280,7 +286,7 @@ func TestSessionRepository_ListRoomsByEventID(t *testing.T) {
 			name:    "db error",
 			eventID: "ev-1",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at`).
 					WithArgs("ev-1").
 					WillReturnError(sql.ErrConnDone)
 			},
@@ -324,9 +330,9 @@ func TestSessionRepository_GetRoomByID(t *testing.T) {
 			name:   "success",
 			roomID: "room-1",
 			mock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "created_at", "updated_at"}).
-					AddRow("room-1", "ev-1", "Room A", 1, false, createdAt, updatedAt)
-				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at`).
+				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "capacity", "description", "how_to_get_there", "created_at", "updated_at"}).
+					AddRow("room-1", "ev-1", "Room A", 1, false, 0, "", "", createdAt, updatedAt)
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at`).
 					WithArgs("room-1").
 					WillReturnRows(rows)
 			},
@@ -336,6 +342,9 @@ func TestSessionRepository_GetRoomByID(t *testing.T) {
 				Name:             "Room A",
 				SessionizeRoomID: 1,
 				NotBookable:      false,
+				Capacity:         0,
+				Description:      "",
+				HowToGetThere:    "",
 				CreatedAt:        createdAt,
 				UpdatedAt:        updatedAt,
 			},
@@ -345,7 +354,7 @@ func TestSessionRepository_GetRoomByID(t *testing.T) {
 			name:   "not found",
 			roomID: "room-missing",
 			mock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, created_at, updated_at`).
+				mock.ExpectQuery(`SELECT id, event_id, name, sessionize_room_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at`).
 					WithArgs("room-missing").
 					WillReturnError(sql.ErrNoRows)
 			},
@@ -393,8 +402,8 @@ func TestSessionRepository_SetRoomNotBookable(t *testing.T) {
 			roomID:      "room-1",
 			notBookable: true,
 			mock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "created_at", "updated_at"}).
-					AddRow("room-1", "ev-1", "Room A", 1, true, createdAt, updatedAt)
+				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "capacity", "description", "how_to_get_there", "created_at", "updated_at"}).
+					AddRow("room-1", "ev-1", "Room A", 1, true, 0, "", "", createdAt, updatedAt)
 				mock.ExpectQuery(`UPDATE rooms`).
 					WithArgs("room-1", true).
 					WillReturnRows(rows)
@@ -408,8 +417,8 @@ func TestSessionRepository_SetRoomNotBookable(t *testing.T) {
 			roomID:      "room-1",
 			notBookable: false,
 			mock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "created_at", "updated_at"}).
-					AddRow("room-1", "ev-1", "Room A", 1, false, createdAt, updatedAt)
+				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "capacity", "description", "how_to_get_there", "created_at", "updated_at"}).
+					AddRow("room-1", "ev-1", "Room A", 1, false, 0, "", "", createdAt, updatedAt)
 				mock.ExpectQuery(`UPDATE rooms`).
 					WithArgs("room-1", false).
 					WillReturnRows(rows)
@@ -450,6 +459,168 @@ func TestSessionRepository_SetRoomNotBookable(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, room)
 			require.Equal(t, tt.wantNotBook, room.NotBookable)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestSessionRepository_UpdateRoomDetails(t *testing.T) {
+	ctx := context.Background()
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name          string
+		roomID        string
+		capacity      int
+		description   string
+		howToGetThere string
+		notBookable   bool
+		mock          func(mock sqlmock.Sqlmock)
+		want          *domain.Room
+		wantErr       bool
+		wantNotFound  bool
+	}{
+		{
+			name:          "success",
+			roomID:        "room-1",
+			capacity:      50,
+			description:   "Main hall",
+			howToGetThere: "Turn left at entrance",
+			notBookable:   true,
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{"id", "event_id", "name", "sessionize_room_id", "not_bookable", "capacity", "description", "how_to_get_there", "created_at", "updated_at"}).
+					AddRow("room-1", "ev-1", "Room A", 1, true, 50, "Main hall", "Turn left at entrance", createdAt, updatedAt)
+				mock.ExpectQuery(`UPDATE rooms`).
+					WithArgs("room-1", 50, "Main hall", "Turn left at entrance", true).
+					WillReturnRows(rows)
+			},
+			want: &domain.Room{
+				ID:               "room-1",
+				EventID:          "ev-1",
+				Name:             "Room A",
+				SessionizeRoomID: 1,
+				NotBookable:      true,
+				Capacity:         50,
+				Description:      "Main hall",
+				HowToGetThere:    "Turn left at entrance",
+				CreatedAt:        createdAt,
+				UpdatedAt:        updatedAt,
+			},
+			wantErr: false,
+		},
+		{
+			name:          "not found",
+			roomID:        "room-missing",
+			capacity:      0,
+			description:   "",
+			howToGetThere: "",
+			notBookable:   false,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE rooms`).
+					WithArgs("room-missing", 0, "", "", false).
+					WillReturnError(sql.ErrNoRows)
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name:          "db error",
+			roomID:        "room-1",
+			capacity:      10,
+			description:   "",
+			howToGetThere: "",
+			notBookable:   false,
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`UPDATE rooms`).
+					WithArgs("room-1", 10, "", "", false).
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			room, err := repo.UpdateRoomDetails(ctx, tt.roomID, tt.capacity, tt.description, tt.howToGetThere, tt.notBookable)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, room)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestSessionRepository_DeleteRoom(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		roomID       string
+		mock         func(mock sqlmock.Sqlmock)
+		wantErr      bool
+		wantNotFound bool
+	}{
+		{
+			name:   "success",
+			roomID: "room-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM rooms WHERE id`).
+					WithArgs("room-1").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:   "not found",
+			roomID: "room-missing",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM rooms WHERE id`).
+					WithArgs("room-missing").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name:   "db error",
+			roomID: "room-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM rooms WHERE id`).
+					WithArgs("room-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			err = repo.DeleteRoom(ctx, tt.roomID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				return
+			}
+			require.NoError(t, err)
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}

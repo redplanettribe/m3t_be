@@ -280,6 +280,229 @@ func (c *ScheduleController) ToggleRoomNotBookable(w http.ResponseWriter, r *htt
 	helpers.WriteJSONSuccess(w, http.StatusOK, room)
 }
 
+// UpdateRoomRequest is the request body for PATCH /events/{eventID}/rooms/{roomID}.
+type UpdateRoomRequest struct {
+	Capacity      int     `json:"capacity"`
+	Description   string  `json:"description"`
+	HowToGetThere string  `json:"how_to_get_there"`
+	NotBookable   *bool   `json:"not_bookable"`
+}
+
+// Validate implements Validator.
+func (u UpdateRoomRequest) Validate() []string {
+	var errs []string
+	if u.Capacity < 0 {
+		errs = append(errs, "capacity must be non-negative")
+	}
+	return errs
+}
+
+// GetRoomSuccessResponse is the success response envelope for GET /events/{eventID}/rooms/{roomID} (200).
+type GetRoomSuccessResponse struct {
+	Data  *domain.Room      `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// ListRoomsSuccessResponse is the success response envelope for GET /events/{eventID}/rooms (200).
+type ListRoomsSuccessResponse struct {
+	Data  []*domain.Room   `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// UpdateRoomSuccessResponse is the success response envelope for PATCH /events/{eventID}/rooms/{roomID} (200).
+type UpdateRoomSuccessResponse struct {
+	Data  *domain.Room      `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// DeleteRoomSuccessResponse is the success response envelope for DELETE /events/{eventID}/rooms/{roomID} (200).
+type DeleteRoomSuccessResponse struct {
+	Data  DeleteEventResponse `json:"data"`
+	Error *helpers.APIError   `json:"error"`
+}
+
+// ListEventRooms godoc
+// @Summary List rooms for an event
+// @Description Returns the list of rooms for the event. Only the event owner can list. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} controllers.ListRoomsSuccessResponse "data is an array of rooms"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/rooms [get]
+func (c *ScheduleController) ListEventRooms(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	rooms, err := c.Service.ListEventRooms(r.Context(), eventID, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if rooms == nil {
+		rooms = []*domain.Room{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, rooms)
+}
+
+// GetEventRoom godoc
+// @Summary Get a room by ID
+// @Description Returns a single room for the event. Only the event owner can access. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param roomID path string true "Room ID (UUID)"
+// @Success 200 {object} controllers.GetRoomSuccessResponse "data contains the room"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/rooms/{roomID} [get]
+func (c *ScheduleController) GetEventRoom(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	roomID := r.PathValue("roomID")
+	if eventID == "" || roomID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or roomID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	room, err := c.Service.GetEventRoom(r.Context(), eventID, roomID, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or room not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, room)
+}
+
+// UpdateEventRoom godoc
+// @Summary Update a room
+// @Description Updates room details (capacity, description, how_to_get_there, not_bookable). Only the event owner can update. Optional fields omitted from body are unchanged (not_bookable keeps current value when omitted). Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param roomID path string true "Room ID (UUID)"
+// @Param body body UpdateRoomRequest true "Room fields to update"
+// @Success 200 {object} controllers.UpdateRoomSuccessResponse "data contains the updated room"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/rooms/{roomID} [patch]
+func (c *ScheduleController) UpdateEventRoom(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	roomID := r.PathValue("roomID")
+	if eventID == "" || roomID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or roomID")
+		return
+	}
+	var req UpdateRoomRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	room, err := c.Service.UpdateEventRoom(r.Context(), eventID, roomID, ownerID, req.Capacity, req.Description, req.HowToGetThere, req.NotBookable)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or room not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, room)
+}
+
+// DeleteEventRoom godoc
+// @Summary Delete a room
+// @Description Deletes a room and its sessions. Only the event owner can delete. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param roomID path string true "Room ID (UUID)"
+// @Success 200 {object} controllers.DeleteRoomSuccessResponse "data contains status"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/rooms/{roomID} [delete]
+func (c *ScheduleController) DeleteEventRoom(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	roomID := r.PathValue("roomID")
+	if eventID == "" || roomID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or roomID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	if err := c.Service.DeleteEventRoom(r.Context(), eventID, roomID, ownerID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or room not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, DeleteEventResponse{Status: "deleted"})
+}
+
 // ListMyEvents godoc
 // @Summary List events owned by the current user
 // @Description Returns events where the authenticated user is the owner. Requires Bearer token.

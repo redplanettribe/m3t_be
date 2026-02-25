@@ -13,17 +13,24 @@ type Room struct {
 	Name             string    `json:"name"`
 	SessionizeRoomID int       `json:"sessionize_room_id"`
 	NotBookable      bool      `json:"not_bookable"`
+	Capacity         int       `json:"capacity"`
+	Description      string    `json:"description"`
+	HowToGetThere    string    `json:"how_to_get_there"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // NewRoom returns a new Room with the given fields. ID is typically set by the repository on create.
-func NewRoom(eventID, name string, sessionizeRoomID int, notBookable bool, createdAt, updatedAt time.Time) *Room {
+// capacity, description, and howToGetThere default to 0/empty for Sessionize imports.
+func NewRoom(eventID, name string, sessionizeRoomID int, notBookable bool, capacity int, description, howToGetThere string, createdAt, updatedAt time.Time) *Room {
 	return &Room{
 		EventID:          eventID,
 		Name:             name,
 		SessionizeRoomID: sessionizeRoomID,
 		NotBookable:      notBookable,
+		Capacity:         capacity,
+		Description:      description,
+		HowToGetThere:    howToGetThere,
 		CreatedAt:        createdAt,
 		UpdatedAt:        updatedAt,
 	}
@@ -72,6 +79,8 @@ type SessionRepository interface {
 	ListRoomsByEventID(ctx context.Context, eventID string) ([]*Room, error)
 	ListSessionsByEventID(ctx context.Context, eventID string) ([]*Session, error)
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
+	UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
+	DeleteRoom(ctx context.Context, roomID string) error
 }
 
 // EventService defines the business logic for managing schedule
@@ -82,6 +91,10 @@ type EventService interface {
 	ListEventsByOwner(ctx context.Context, ownerID string) ([]*Event, error)
 	DeleteEvent(ctx context.Context, eventID string, ownerID string) error
 	ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
+	ListEventRooms(ctx context.Context, eventID, ownerID string) ([]*Room, error)
+	GetEventRoom(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
+	UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*Room, error)
+	DeleteEventRoom(ctx context.Context, eventID, roomID, ownerID string) error
 	AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error
 	AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*EventTeamMember, error)
 	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)
