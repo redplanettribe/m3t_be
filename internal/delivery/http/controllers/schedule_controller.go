@@ -35,16 +35,16 @@ func (c CreateEventRequest) Validate() []string {
 
 // CreateEventSuccessResponse is the success response envelope for POST /events (201).
 type CreateEventSuccessResponse struct {
-	Data  *domain.Event  `json:"data"`
+	Data  *domain.Event     `json:"data"`
 	Error *helpers.APIError `json:"error"`
 }
 
 type ScheduleController struct {
 	Logger  *slog.Logger
-	Service domain.ManageScheduleService
+	Service domain.EventService
 }
 
-func NewScheduleController(logger *slog.Logger, svc domain.ManageScheduleService) *ScheduleController {
+func NewScheduleController(logger *slog.Logger, svc domain.EventService) *ScheduleController {
 	return &ScheduleController{
 		Logger:  logger,
 		Service: svc,
@@ -94,7 +94,7 @@ type GetEventByIDResponse struct {
 // GetEventByIDSuccessResponse is the success response envelope for GET /events/{eventID} (200).
 type GetEventByIDSuccessResponse struct {
 	Data  GetEventByIDResponse `json:"data"`
-	Error *helpers.APIError   `json:"error"`
+	Error *helpers.APIError    `json:"error"`
 }
 
 // GetEventByID godoc
@@ -176,7 +176,7 @@ func (c *ScheduleController) ImportSessionize(w http.ResponseWriter, r *http.Req
 
 // ListMyEventsSuccessResponse is the success response envelope for GET /events/me (200).
 type ListMyEventsSuccessResponse struct {
-	Data  []*domain.Event `json:"data"`
+	Data  []*domain.Event   `json:"data"`
 	Error *helpers.APIError `json:"error"`
 }
 
@@ -233,8 +233,8 @@ func (c *ScheduleController) DeleteEvent(w http.ResponseWriter, r *http.Request)
 
 // ToggleRoomNotBookableSuccessResponse is the success response envelope for PATCH /events/{eventID}/rooms/{roomID}/not-bookable (200).
 type ToggleRoomNotBookableSuccessResponse struct {
-	Data  *domain.Room       `json:"data"`
-	Error *helpers.APIError  `json:"error"`
+	Data  *domain.Room      `json:"data"`
+	Error *helpers.APIError `json:"error"`
 }
 
 // ToggleRoomNotBookable godoc
@@ -327,7 +327,7 @@ func (a AddEventTeamMemberRequest) Validate() []string {
 // AddEventTeamMemberSuccessResponse is the success response envelope for POST /events/{eventID}/team-members (201).
 type AddEventTeamMemberSuccessResponse struct {
 	Data  *domain.EventTeamMember `json:"data"`
-	Error *helpers.APIError        `json:"error"`
+	Error *helpers.APIError       `json:"error"`
 }
 
 // AddEventTeamMember godoc
@@ -445,7 +445,7 @@ type RemoveEventTeamMemberResponse struct {
 // RemoveEventTeamMemberSuccessResponse is the success response envelope for DELETE /events/{eventID}/team-members/{userID} (200).
 type RemoveEventTeamMemberSuccessResponse struct {
 	Data  RemoveEventTeamMemberResponse `json:"data"`
-	Error *helpers.APIError            `json:"error"`
+	Error *helpers.APIError             `json:"error"`
 }
 
 // RemoveEventTeamMember godoc

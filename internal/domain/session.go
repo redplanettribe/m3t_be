@@ -74,8 +74,8 @@ type SessionRepository interface {
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
 }
 
-// ManageScheduleService defines the business logic for managing schedule
-type ManageScheduleService interface {
+// EventService defines the business logic for managing schedule
+type EventService interface {
 	CreateEvent(ctx context.Context, event *Event) error
 	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error

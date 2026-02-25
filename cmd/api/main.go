@@ -61,7 +61,7 @@ func main() {
 	roleRepo := postgres.NewRoleRepository(db)
 	loginCodeRepo := postgres.NewLoginCodeRepository(db)
 	sessionizeFetcher := sessionize.NewHTTPFetcher(nil)
-	manageScheduleService := services.NewManageScheduleService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, sessionizeFetcher, 10*time.Second)
+	manageScheduleService := services.NewEventService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, sessionizeFetcher, 10*time.Second)
 	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
 	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo)
 	attendeeController := controllers.NewAttendeeController(logger, attendeeService)

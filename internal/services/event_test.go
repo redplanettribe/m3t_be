@@ -73,13 +73,13 @@ func (f *fakeEventRepo) Delete(ctx context.Context, id string) error {
 
 // fakeSessionRepo is an in-memory SessionRepository for tests.
 type fakeSessionRepo struct {
-	rooms    []*domain.Room
-	sessions []*domain.Session
-	roomID   int
-	sessID   int
-	createRoomErr   error
+	rooms            []*domain.Room
+	sessions         []*domain.Session
+	roomID           int
+	sessID           int
+	createRoomErr    error
 	createSessionErr error
-	deleteErr       error
+	deleteErr        error
 }
 
 func newFakeSessionRepo() *fakeSessionRepo {
@@ -201,8 +201,8 @@ func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) 
 
 // fakeEventTeamMemberRepo is an in-memory EventTeamMemberRepository for tests.
 type fakeEventTeamMemberRepo struct {
-	members map[string]map[string]bool // eventID -> userID -> true
-	addErr  error
+	members   map[string]map[string]bool // eventID -> userID -> true
+	addErr    error
 	removeErr error
 }
 
@@ -373,7 +373,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
 			ev := &domain.Event{Name: tt.event.Name, OwnerID: tt.event.OwnerID}
 			err := svc.CreateEvent(ctx, ev)
 			if tt.wantErr {
@@ -467,7 +467,7 @@ func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
 			err := svc.ImportSessionizeData(ctx, tt.eventID, tt.sessID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -526,7 +526,7 @@ func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
 			events, err := svc.ListEventsByOwner(ctx, tt.ownerID)
 			require.NoError(t, err)
 			require.Len(t, events, tt.wantLen)
@@ -540,12 +540,12 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name      string
-		setup     func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
-		eventID   string
-		wantErr   bool
+		name         string
+		setup        func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		eventID      string
+		wantErr      bool
 		wantNotFound bool
-		assert    func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session)
+		assert       func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session)
 	}{
 		{
 			name: "success with rooms and sessions",
@@ -558,8 +558,8 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []string{}}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
-			eventID: "ev-1",
-			wantErr: false,
+			eventID:      "ev-1",
+			wantErr:      false,
 			wantNotFound: false,
 			assert: func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session) {
 				require.NotNil(t, event)
@@ -576,10 +576,10 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			eventID: "ev-missing",
-			wantErr: true,
+			eventID:      "ev-missing",
+			wantErr:      true,
 			wantNotFound: true,
-			assert: func(t *testing.T, _ *domain.Event, _ []*domain.Room, _ []*domain.Session) {},
+			assert:       func(t *testing.T, _ *domain.Event, _ []*domain.Room, _ []*domain.Session) {},
 		},
 		{
 			name: "success empty rooms and sessions",
@@ -588,8 +588,8 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			eventID: "ev-1",
-			wantErr: false,
+			eventID:      "ev-1",
+			wantErr:      false,
 			wantNotFound: false,
 			assert: func(t *testing.T, event *domain.Event, rooms []*domain.Room, sessions []*domain.Session) {
 				require.NotNil(t, event)
@@ -605,7 +605,7 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
 			event, rooms, sessions, err := svc.GetEventByID(ctx, tt.eventID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -625,12 +625,12 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name         string
-		setup        func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
-		eventID      string
-		ownerID      string
-		wantErr      bool
-		wantNotFound bool
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher)
+		eventID       string
+		ownerID       string
+		wantErr       bool
+		wantNotFound  bool
 		wantForbidden bool
 		assertDeleted bool
 	}{
@@ -651,10 +651,10 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionizeFetcher) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
-			eventID:       "ev-missing",
-			ownerID:       "user-1",
-			wantErr:       true,
-			wantNotFound:  true,
+			eventID:      "ev-missing",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
 		},
 		{
 			name: "forbidden not owner",
@@ -673,7 +673,7 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
 			err := svc.DeleteEvent(ctx, tt.eventID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -805,7 +805,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewManageScheduleService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
 			room, err := svc.ToggleRoomNotBookable(ctx, tt.eventID, tt.roomID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -863,12 +863,12 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			wantForbidden: true,
 		},
 		{
-			name:        "event not found",
-			eventID:     "ev-missing",
-			userIDToAdd: "user-2",
-			ownerID:     "user-1",
-			setupEvent:  func(er *fakeEventRepo) {},
-			wantErr:     true,
+			name:         "event not found",
+			eventID:      "ev-missing",
+			userIDToAdd:  "user-2",
+			ownerID:      "user-1",
+			setupEvent:   func(er *fakeEventRepo) {},
+			wantErr:      true,
 			wantNotFound: true,
 		},
 		{
@@ -879,7 +879,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			setupEvent: func(er *fakeEventRepo) {
 				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
-			wantErr:     true,
+			wantErr:      true,
 			wantConflict: true,
 		},
 		{
@@ -893,7 +893,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			setupTeamRepo: func(tr *fakeEventTeamMemberRepo) {
 				tr.Add(ctx, "ev-1", "user-2")
 			},
-			wantErr:     true,
+			wantErr:      true,
 			wantConflict: true,
 		},
 	}
@@ -906,7 +906,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewManageScheduleService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
 			err := svc.AddEventTeamMember(ctx, tt.eventID, tt.userIDToAdd, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -942,7 +942,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 		wantErr       bool
 		wantForbidden bool
 		wantNotFound  bool
-		wantCount    int
+		wantCount     int
 	}{
 		{
 			name:     "owner lists members",
@@ -955,7 +955,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 				tr.Add(ctx, "ev-1", "user-2")
 				tr.Add(ctx, "ev-1", "user-3")
 			},
-			wantErr:    false,
+			wantErr:   false,
 			wantCount: 2,
 		},
 		{
@@ -969,11 +969,11 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			wantForbidden: true,
 		},
 		{
-			name:       "event not found",
-			eventID:    "ev-missing",
-			callerID:   "user-1",
-			setupEvent: func(er *fakeEventRepo) {},
-			wantErr:    true,
+			name:         "event not found",
+			eventID:      "ev-missing",
+			callerID:     "user-1",
+			setupEvent:   func(er *fakeEventRepo) {},
+			wantErr:      true,
 			wantNotFound: true,
 		},
 		{
@@ -983,7 +983,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			setupEvent: func(er *fakeEventRepo) {
 				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
-			wantErr:    false,
+			wantErr:   false,
 			wantCount: 0,
 		},
 	}
@@ -996,7 +996,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewManageScheduleService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
 			got, err := svc.ListEventTeamMembers(ctx, tt.eventID, tt.callerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1019,15 +1019,15 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name          string
-		eventID       string
+		name           string
+		eventID        string
 		userIDToRemove string
-		ownerID       string
-		setupEvent    func(*fakeEventRepo)
-		setupTeamRepo func(*fakeEventTeamMemberRepo)
-		wantErr       bool
-		wantForbidden bool
-		wantNotFound  bool
+		ownerID        string
+		setupEvent     func(*fakeEventRepo)
+		setupTeamRepo  func(*fakeEventTeamMemberRepo)
+		wantErr        bool
+		wantForbidden  bool
+		wantNotFound   bool
 	}{
 		{
 			name:           "owner removes member success",
@@ -1073,7 +1073,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 			setupEvent: func(er *fakeEventRepo) {
 				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
-			wantErr:       true,
+			wantErr:      true,
 			wantNotFound: true,
 		},
 	}
@@ -1086,7 +1086,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewManageScheduleService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
 			err := svc.RemoveEventTeamMember(ctx, tt.eventID, tt.userIDToRemove, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1112,15 +1112,15 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name          string
-		eventID       string
-		email         string
-		ownerID       string
-		setupEvent    func(*fakeEventRepo)
-		setupUserRepo func(*fakeUserRepoForSchedule)
-		wantErr       bool
+		name             string
+		eventID          string
+		email            string
+		ownerID          string
+		setupEvent       func(*fakeEventRepo)
+		setupUserRepo    func(*fakeUserRepoForSchedule)
+		wantErr          bool
 		wantUserNotFound bool
-		wantConflict  bool
+		wantConflict     bool
 		wantMemberUserID string
 	}{
 		{
@@ -1145,9 +1145,9 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			setupEvent: func(er *fakeEventRepo) {
 				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
-			setupUserRepo:     func(ur *fakeUserRepoForSchedule) {},
-			wantErr:           true,
-			wantUserNotFound:  true,
+			setupUserRepo:    func(ur *fakeUserRepoForSchedule) {},
+			wantErr:          true,
+			wantUserNotFound: true,
 		},
 		{
 			name:    "email normalized to lower",
@@ -1174,7 +1174,7 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			if tt.setupUserRepo != nil {
 				tt.setupUserRepo(userRepo)
 			}
-			svc := NewManageScheduleService(eventRepo, newFakeSessionRepo(), teamRepo, userRepo, &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, userRepo, &fakeSessionizeFetcher{}, timeout)
 			got, err := svc.AddEventTeamMemberByEmail(ctx, tt.eventID, tt.email, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)

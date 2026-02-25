@@ -13,7 +13,7 @@ import (
 	"multitrackticketing/internal/domain"
 )
 
-type manageScheduleService struct {
+type eventService struct {
 	eventRepo           domain.EventRepository
 	sessionRepo         domain.SessionRepository
 	eventTeamMemberRepo domain.EventTeamMemberRepository
@@ -22,8 +22,14 @@ type manageScheduleService struct {
 	contextTimeout      time.Duration
 }
 
-func NewManageScheduleService(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, eventTeamMemberRepo domain.EventTeamMemberRepository, userRepo domain.UserRepository, sessionize domain.SessionizeFetcher, timeout time.Duration) domain.ManageScheduleService {
-	return &manageScheduleService{
+func NewEventService(eventRepo domain.EventRepository,
+	sessionRepo domain.SessionRepository,
+	eventTeamMemberRepo domain.EventTeamMemberRepository,
+	userRepo domain.UserRepository,
+	sessionize domain.SessionizeFetcher,
+	timeout time.Duration,
+) domain.EventService {
+	return &eventService{
 		eventRepo:           eventRepo,
 		sessionRepo:         sessionRepo,
 		eventTeamMemberRepo: eventTeamMemberRepo,
@@ -33,7 +39,7 @@ func NewManageScheduleService(eventRepo domain.EventRepository, sessionRepo doma
 	}
 }
 
-func (s *manageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
+func (s *eventService) CreateEvent(ctx context.Context, event *domain.Event) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -72,7 +78,7 @@ func generateEventCode() (string, error) {
 	return string(b), nil
 }
 
-func (s *manageScheduleService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {
+func (s *eventService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -122,7 +128,7 @@ func deriveTags(categories []domain.SessionizeCategory) []string {
 	return out
 }
 
-func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
+func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -185,13 +191,13 @@ func (s *manageScheduleService) ImportSessionizeData(ctx context.Context, eventI
 	return nil
 }
 
-func (s *manageScheduleService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
+func (s *eventService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 	return s.eventRepo.ListByOwnerID(ctx, ownerID)
 }
 
-func (s *manageScheduleService) DeleteEvent(ctx context.Context, eventID string, ownerID string) error {
+func (s *eventService) DeleteEvent(ctx context.Context, eventID string, ownerID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -214,7 +220,7 @@ func (s *manageScheduleService) DeleteEvent(ctx context.Context, eventID string,
 	return nil
 }
 
-func (s *manageScheduleService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
+func (s *eventService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -247,7 +253,7 @@ func (s *manageScheduleService) ToggleRoomNotBookable(ctx context.Context, event
 	return updated, nil
 }
 
-func (s *manageScheduleService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
+func (s *eventService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -273,7 +279,7 @@ func (s *manageScheduleService) AddEventTeamMember(ctx context.Context, eventID,
 	return nil
 }
 
-func (s *manageScheduleService) AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*domain.EventTeamMember, error) {
+func (s *eventService) AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*domain.EventTeamMember, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -303,7 +309,7 @@ func (s *manageScheduleService) AddEventTeamMemberByEmail(ctx context.Context, e
 	}, nil
 }
 
-func (s *manageScheduleService) ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*domain.EventTeamMember, error) {
+func (s *eventService) ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*domain.EventTeamMember, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -327,7 +333,7 @@ func (s *manageScheduleService) ListEventTeamMembers(ctx context.Context, eventI
 	return members, nil
 }
 
-func (s *manageScheduleService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
+func (s *eventService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
