@@ -22,36 +22,36 @@ import (
 // testLogger is a no-op logger for controller tests so we don't assert on log output.
 var testLogger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-// fakeManageScheduleService implements domain.ManageScheduleService for handler tests.
-type fakeManageScheduleService struct {
-	createEventErr         error
-	importSessionizeErr    error
-	listEventsByOwnerErr   error
-	getEventByIDErr        error
-	deleteEventErr         error
-	toggleRoomErr          error
-	toggleRoomResult       *domain.Room
-	addTeamMemberErr         error
-	addTeamMemberByEmailErr  error
-	addTeamMemberByEmailResult *domain.EventTeamMember
-	listTeamMembersErr       error
-	listTeamMembersResult    []*domain.EventTeamMember
-	removeTeamMemberErr      error
-	lastCreateEvent          *domain.Event
-	lastImportEventID        string
-	lastImportSessionizeID   string
-	lastDeleteEventID        string
-	lastDeleteOwnerID        string
-	lastAddTeamMemberEventID string
-	lastAddTeamMemberEmail   string
-	lastAddTeamMemberOwnerID string
-	lastListTeamMembersEventID   string
-	lastListTeamMembersCallerID  string
-	lastRemoveTeamMemberEventID  string
-	lastRemoveTeamMemberUserID   string
-	lastRemoveTeamMemberOwnerID  string
-	eventsByOwner          map[string][]*domain.Event // ownerID -> events to return
-	eventByID              map[string]struct {       // eventID -> event, rooms, sessions to return
+// fakeEventService implements domain.EventService for handler tests.
+type fakeEventService struct {
+	createEventErr              error
+	importSessionizeErr         error
+	listEventsByOwnerErr        error
+	getEventByIDErr             error
+	deleteEventErr              error
+	toggleRoomErr               error
+	toggleRoomResult            *domain.Room
+	addTeamMemberErr            error
+	addTeamMemberByEmailErr     error
+	addTeamMemberByEmailResult  *domain.EventTeamMember
+	listTeamMembersErr          error
+	listTeamMembersResult       []*domain.EventTeamMember
+	removeTeamMemberErr         error
+	lastCreateEvent             *domain.Event
+	lastImportEventID           string
+	lastImportSessionizeID      string
+	lastDeleteEventID           string
+	lastDeleteOwnerID           string
+	lastAddTeamMemberEventID    string
+	lastAddTeamMemberEmail      string
+	lastAddTeamMemberOwnerID    string
+	lastListTeamMembersEventID  string
+	lastListTeamMembersCallerID string
+	lastRemoveTeamMemberEventID string
+	lastRemoveTeamMemberUserID  string
+	lastRemoveTeamMemberOwnerID string
+	eventsByOwner               map[string][]*domain.Event // ownerID -> events to return
+	eventByID                   map[string]struct {        // eventID -> event, rooms, sessions to return
 		event    *domain.Event
 		rooms    []*domain.Room
 		sessions []*domain.Session
@@ -64,16 +64,16 @@ type fakeManageScheduleService struct {
 	lastSendInvitationsOwnerID string
 	lastSendInvitationsEmails  []string
 	// ListEventInvitations
-	listEventInvitationsErr    error
-	listEventInvitationsResult []*domain.EventInvitation
-	listEventInvitationsTotal  int
+	listEventInvitationsErr     error
+	listEventInvitationsResult  []*domain.EventInvitation
+	listEventInvitationsTotal   int
 	lastListInvitationsEventID  string
 	lastListInvitationsCallerID string
 	lastListInvitationsSearch   string
 	lastListInvitationsParams   domain.PaginationParams
 }
 
-func (f *fakeManageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
+func (f *fakeEventService) CreateEvent(ctx context.Context, event *domain.Event) error {
 	f.lastCreateEvent = event
 	if f.createEventErr != nil {
 		return f.createEventErr
@@ -82,13 +82,13 @@ func (f *fakeManageScheduleService) CreateEvent(ctx context.Context, event *doma
 	return nil
 }
 
-func (f *fakeManageScheduleService) ImportSessionizeData(ctx context.Context, eventID, sessionizeID string) error {
+func (f *fakeEventService) ImportSessionizeData(ctx context.Context, eventID, sessionizeID string) error {
 	f.lastImportEventID = eventID
 	f.lastImportSessionizeID = sessionizeID
 	return f.importSessionizeErr
 }
 
-func (f *fakeManageScheduleService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
+func (f *fakeEventService) ListEventsByOwner(ctx context.Context, ownerID string) ([]*domain.Event, error) {
 	if f.listEventsByOwnerErr != nil {
 		return nil, f.listEventsByOwnerErr
 	}
@@ -100,7 +100,7 @@ func (f *fakeManageScheduleService) ListEventsByOwner(ctx context.Context, owner
 	return []*domain.Event{}, nil
 }
 
-func (f *fakeManageScheduleService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {
+func (f *fakeEventService) GetEventByID(ctx context.Context, eventID string) (*domain.Event, []*domain.Room, []*domain.Session, error) {
 	if f.getEventByIDErr != nil {
 		return nil, nil, nil, f.getEventByIDErr
 	}
@@ -112,26 +112,26 @@ func (f *fakeManageScheduleService) GetEventByID(ctx context.Context, eventID st
 	return nil, nil, nil, domain.ErrNotFound
 }
 
-func (f *fakeManageScheduleService) DeleteEvent(ctx context.Context, eventID string, ownerID string) error {
+func (f *fakeEventService) DeleteEvent(ctx context.Context, eventID string, ownerID string) error {
 	f.lastDeleteEventID = eventID
 	f.lastDeleteOwnerID = ownerID
 	return f.deleteEventErr
 }
 
-func (f *fakeManageScheduleService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
+func (f *fakeEventService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
 	if f.toggleRoomErr != nil {
 		return nil, f.toggleRoomErr
 	}
 	return f.toggleRoomResult, nil
 }
 
-func (f *fakeManageScheduleService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
+func (f *fakeEventService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
 	f.lastAddTeamMemberEventID = eventID
 	f.lastAddTeamMemberOwnerID = ownerID
 	return f.addTeamMemberErr
 }
 
-func (f *fakeManageScheduleService) AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*domain.EventTeamMember, error) {
+func (f *fakeEventService) AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*domain.EventTeamMember, error) {
 	f.lastAddTeamMemberEventID = eventID
 	f.lastAddTeamMemberEmail = email
 	f.lastAddTeamMemberOwnerID = ownerID
@@ -144,7 +144,7 @@ func (f *fakeManageScheduleService) AddEventTeamMemberByEmail(ctx context.Contex
 	return &domain.EventTeamMember{EventID: eventID, UserID: "resolved-user-id"}, nil
 }
 
-func (f *fakeManageScheduleService) ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*domain.EventTeamMember, error) {
+func (f *fakeEventService) ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*domain.EventTeamMember, error) {
 	f.lastListTeamMembersEventID = eventID
 	f.lastListTeamMembersCallerID = callerID
 	if f.listTeamMembersErr != nil {
@@ -156,14 +156,14 @@ func (f *fakeManageScheduleService) ListEventTeamMembers(ctx context.Context, ev
 	return []*domain.EventTeamMember{}, nil
 }
 
-func (f *fakeManageScheduleService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
+func (f *fakeEventService) RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error {
 	f.lastRemoveTeamMemberEventID = eventID
 	f.lastRemoveTeamMemberUserID = userIDToRemove
 	f.lastRemoveTeamMemberOwnerID = ownerID
 	return f.removeTeamMemberErr
 }
 
-func (f *fakeManageScheduleService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
+func (f *fakeEventService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
 	f.lastSendInvitationsEventID = eventID
 	f.lastSendInvitationsOwnerID = ownerID
 	f.lastSendInvitationsEmails = emails
@@ -173,7 +173,7 @@ func (f *fakeManageScheduleService) SendEventInvitations(ctx context.Context, ev
 	return f.sendEventInvitationsSent, f.sendEventInvitationsFailed, nil
 }
 
-func (f *fakeManageScheduleService) ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params domain.PaginationParams) ([]*domain.EventInvitation, int, error) {
+func (f *fakeEventService) ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params domain.PaginationParams) ([]*domain.EventInvitation, int, error) {
 	f.lastListInvitationsEventID = eventID
 	f.lastListInvitationsCallerID = callerID
 	f.lastListInvitationsSearch = search
@@ -257,7 +257,7 @@ func TestScheduleController_CreateEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{createEventErr: tt.fakeErr}
+			fake := &fakeEventService{createEventErr: tt.fakeErr}
 			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodPost, "/events", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -330,7 +330,7 @@ func TestScheduleController_ImportSessionize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{importSessionizeErr: tt.fakeErr}
+			fake := &fakeEventService{importSessionizeErr: tt.fakeErr}
 			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodPost, "http://test"+tt.path, nil)
 			req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
@@ -407,24 +407,24 @@ func TestScheduleController_ListMyEvents(t *testing.T) {
 			},
 		},
 		{
-			name:          "no user in context",
-			noUserContext: true,
-			wantStatus:    http.StatusUnauthorized,
+			name:           "no user in context",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
-			checkEvents:   nil,
+			checkEvents:    nil,
 		},
 		{
-			name:          "service error",
-			fakeErr:       errors.New("db error"),
-			wantStatus:    http.StatusInternalServerError,
+			name:           "service error",
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
 			wantBodySubstr: "db error",
-			checkEvents:   nil,
+			checkEvents:    nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{
+			fake := &fakeEventService{
 				listEventsByOwnerErr: tt.fakeErr,
 				eventsByOwner:        tt.eventsByOwner,
 			}
@@ -457,11 +457,11 @@ func TestScheduleController_ListMyEvents(t *testing.T) {
 
 func TestScheduleController_GetEventByID(t *testing.T) {
 	tests := []struct {
-		name           string
-		eventID        string
-		noUserContext  bool
-		fakeErr        error
-		eventByID      map[string]struct {
+		name          string
+		eventID       string
+		noUserContext bool
+		fakeErr       error
+		eventByID     map[string]struct {
 			event    *domain.Event
 			rooms    []*domain.Room
 			sessions []*domain.Session
@@ -506,12 +506,12 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 			checkResponse:  nil,
 		},
 		{
-			name:          "no user in context",
-			eventID:       "ev-123",
-			noUserContext: true,
-			wantStatus:    http.StatusUnauthorized,
+			name:           "no user in context",
+			eventID:        "ev-123",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
-			checkResponse: nil,
+			checkResponse:  nil,
 		},
 		{
 			name:    "event not found",
@@ -526,9 +526,9 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 			checkResponse:  nil,
 		},
 		{
-			name:     "service error",
-			eventID:  "ev-123",
-			fakeErr:  errors.New("db error"),
+			name:           "service error",
+			eventID:        "ev-123",
+			fakeErr:        errors.New("db error"),
 			wantStatus:     http.StatusInternalServerError,
 			wantBodySubstr: "db error",
 			checkResponse:  nil,
@@ -537,7 +537,7 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{
+			fake := &fakeEventService{
 				getEventByIDErr: tt.fakeErr,
 				eventByID:       tt.eventByID,
 			}
@@ -610,11 +610,11 @@ func TestScheduleController_ToggleRoomNotBookable(t *testing.T) {
 			wantBodySubstr: "missing eventID or roomID",
 		},
 		{
-			name:          "no user in context",
-			eventID:       "ev-123",
-			roomID:        "room-1",
-			noUserContext: true,
-			wantStatus:    http.StatusUnauthorized,
+			name:           "no user in context",
+			eventID:        "ev-123",
+			roomID:         "room-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
 		},
 		{
@@ -645,7 +645,7 @@ func TestScheduleController_ToggleRoomNotBookable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{toggleRoomErr: tt.fakeErr, toggleRoomResult: tt.fakeResult}
+			fake := &fakeEventService{toggleRoomErr: tt.fakeErr, toggleRoomResult: tt.fakeResult}
 			ctrl := NewScheduleController(testLogger, fake)
 			path := "http://test/events/" + tt.eventID + "/rooms/" + tt.roomID + "/not-bookable"
 			req := httptest.NewRequest(http.MethodPatch, path, nil)
@@ -688,13 +688,13 @@ func TestScheduleController_DeleteEvent(t *testing.T) {
 		fakeErr        error
 		wantStatus     int
 		wantBodySubstr string
-		checkCall      func(t *testing.T, fake *fakeManageScheduleService)
+		checkCall      func(t *testing.T, fake *fakeEventService)
 	}{
 		{
 			name:       "success",
 			eventID:    "ev-123",
 			wantStatus: http.StatusOK,
-			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, "ev-123", fake.lastDeleteEventID)
 				assert.Equal(t, "user-123", fake.lastDeleteOwnerID)
 			},
@@ -706,10 +706,10 @@ func TestScheduleController_DeleteEvent(t *testing.T) {
 			wantBodySubstr: "missing eventID",
 		},
 		{
-			name:          "no user in context",
-			eventID:       "ev-123",
-			noUserContext: true,
-			wantStatus:    http.StatusUnauthorized,
+			name:           "no user in context",
+			eventID:        "ev-123",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
 		},
 		{
@@ -737,7 +737,7 @@ func TestScheduleController_DeleteEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{deleteEventErr: tt.fakeErr}
+			fake := &fakeEventService{deleteEventErr: tt.fakeErr}
 			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodDelete, "http://test/events/"+tt.eventID, nil)
 			if tt.eventID != "" {
@@ -831,24 +831,24 @@ func TestScheduleController_AddEventTeamMember(t *testing.T) {
 			wantBodySubstr: "event not found",
 		},
 		{
-			name:           "forbidden",
-			eventID:        "ev-1",
-			body:           `{"email":"teammate@example.com"}`,
-			fakeErr:        domain.ErrForbidden,
-			wantStatus:     http.StatusForbidden,
+			name:       "forbidden",
+			eventID:    "ev-1",
+			body:       `{"email":"teammate@example.com"}`,
+			fakeErr:    domain.ErrForbidden,
+			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:           "conflict already member",
-			eventID:        "ev-1",
-			body:           `{"email":"teammate@example.com"}`,
-			fakeErr:        domain.ErrAlreadyMember,
-			wantStatus:     http.StatusConflict,
+			name:       "conflict already member",
+			eventID:    "ev-1",
+			body:       `{"email":"teammate@example.com"}`,
+			fakeErr:    domain.ErrAlreadyMember,
+			wantStatus: http.StatusConflict,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{addTeamMemberByEmailErr: tt.fakeErr, addTeamMemberByEmailResult: tt.fakeResult}
+			fake := &fakeEventService{addTeamMemberByEmailErr: tt.fakeErr, addTeamMemberByEmailResult: tt.fakeResult}
 			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodPost, "http://test/events/"+tt.eventID+"/team-members", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -908,22 +908,22 @@ func TestScheduleController_ListEventTeamMembers(t *testing.T) {
 			wantStatus:    http.StatusUnauthorized,
 		},
 		{
-			name:           "event not found",
-			eventID:        "ev-1",
-			fakeErr:        domain.ErrNotFound,
-			wantStatus:     http.StatusNotFound,
+			name:       "event not found",
+			eventID:    "ev-1",
+			fakeErr:    domain.ErrNotFound,
+			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:           "forbidden",
-			eventID:        "ev-1",
-			fakeErr:        domain.ErrForbidden,
-			wantStatus:     http.StatusForbidden,
+			name:       "forbidden",
+			eventID:    "ev-1",
+			fakeErr:    domain.ErrForbidden,
+			wantStatus: http.StatusForbidden,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{listTeamMembersErr: tt.fakeErr, listTeamMembersResult: tt.fakeResult}
+			fake := &fakeEventService{listTeamMembersErr: tt.fakeErr, listTeamMembersResult: tt.fakeResult}
 			ctrl := NewScheduleController(testLogger, fake)
 			req := httptest.NewRequest(http.MethodGet, "http://test/events/"+tt.eventID+"/team-members", nil)
 			if tt.eventID != "" {
@@ -981,24 +981,24 @@ func TestScheduleController_RemoveEventTeamMember(t *testing.T) {
 			wantStatus:    http.StatusUnauthorized,
 		},
 		{
-			name:           "event not found",
-			eventID:        "ev-1",
-			userID:         "user-2",
-			fakeErr:        domain.ErrNotFound,
-			wantStatus:     http.StatusNotFound,
+			name:       "event not found",
+			eventID:    "ev-1",
+			userID:     "user-2",
+			fakeErr:    domain.ErrNotFound,
+			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:           "forbidden",
-			eventID:        "ev-1",
-			userID:         "user-2",
-			fakeErr:        domain.ErrForbidden,
-			wantStatus:     http.StatusForbidden,
+			name:       "forbidden",
+			eventID:    "ev-1",
+			userID:     "user-2",
+			fakeErr:    domain.ErrForbidden,
+			wantStatus: http.StatusForbidden,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{removeTeamMemberErr: tt.fakeErr}
+			fake := &fakeEventService{removeTeamMemberErr: tt.fakeErr}
 			ctrl := NewScheduleController(testLogger, fake)
 			path := "http://test/events/" + tt.eventID + "/team-members/" + tt.userID
 			req := httptest.NewRequest(http.MethodDelete, path, nil)
@@ -1041,7 +1041,7 @@ func TestScheduleController_ListEventInvitations(t *testing.T) {
 		wantStatus     int
 		wantBodySubstr string
 		noUserContext  bool
-		checkCall      func(t *testing.T, fake *fakeManageScheduleService)
+		checkCall      func(t *testing.T, fake *fakeEventService)
 		checkData      func(t *testing.T, data ListEventInvitationsResponse)
 	}{
 		{
@@ -1050,7 +1050,7 @@ func TestScheduleController_ListEventInvitations(t *testing.T) {
 			fakeResult: []*domain.EventInvitation{{ID: "inv-1", EventID: "ev-1", Email: "a@example.com"}, {ID: "inv-2", EventID: "ev-1", Email: "b@example.com"}},
 			fakeTotal:  2,
 			wantStatus: http.StatusOK,
-			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, "ev-1", fake.lastListInvitationsEventID)
 				assert.Equal(t, "user-123", fake.lastListInvitationsCallerID)
 				assert.Equal(t, 1, fake.lastListInvitationsParams.Page)
@@ -1073,7 +1073,7 @@ func TestScheduleController_ListEventInvitations(t *testing.T) {
 			fakeResult: []*domain.EventInvitation{},
 			fakeTotal:  10,
 			wantStatus: http.StatusOK,
-			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, 2, fake.lastListInvitationsParams.Page)
 				assert.Equal(t, 5, fake.lastListInvitationsParams.PageSize)
 			},
@@ -1104,7 +1104,7 @@ func TestScheduleController_ListEventInvitations(t *testing.T) {
 			fakeResult: []*domain.EventInvitation{{ID: "inv-1", EventID: "ev-1", Email: "alice@example.com"}},
 			fakeTotal:  1,
 			wantStatus: http.StatusOK,
-			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, "alice", fake.lastListInvitationsSearch)
 			},
 			checkData: func(t *testing.T, data ListEventInvitationsResponse) {
@@ -1119,10 +1119,10 @@ func TestScheduleController_ListEventInvitations(t *testing.T) {
 			wantBodySubstr: "missing eventID",
 		},
 		{
-			name:          "no user in context",
-			eventID:       "ev-1",
-			noUserContext: true,
-			wantStatus:   http.StatusUnauthorized,
+			name:           "no user in context",
+			eventID:        "ev-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
 		},
 		{
@@ -1150,7 +1150,7 @@ func TestScheduleController_ListEventInvitations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{
+			fake := &fakeEventService{
 				listEventInvitationsErr:    tt.fakeErr,
 				listEventInvitationsResult: tt.fakeResult,
 				listEventInvitationsTotal:  tt.fakeTotal,
@@ -1204,7 +1204,7 @@ func TestScheduleController_SendEventInvitations(t *testing.T) {
 		wantStatus     int
 		wantBodySubstr string
 		noUserContext  bool
-		checkCall      func(t *testing.T, fake *fakeManageScheduleService)
+		checkCall      func(t *testing.T, fake *fakeEventService)
 		checkData      func(t *testing.T, data SendEventInvitationsResponse)
 	}{
 		{
@@ -1214,7 +1214,7 @@ func TestScheduleController_SendEventInvitations(t *testing.T) {
 			fakeSent:   2,
 			fakeFailed: nil,
 			wantStatus: http.StatusOK,
-			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, "ev-1", fake.lastSendInvitationsEventID)
 				assert.Equal(t, "user-123", fake.lastSendInvitationsOwnerID)
 				require.Len(t, fake.lastSendInvitationsEmails, 2)
@@ -1261,11 +1261,11 @@ func TestScheduleController_SendEventInvitations(t *testing.T) {
 			wantBodySubstr: "no valid emails",
 		},
 		{
-			name:          "no user in context",
-			eventID:       "ev-1",
-			body:          `{"emails":"a@example.com"}`,
-			noUserContext: true,
-			wantStatus:    http.StatusUnauthorized,
+			name:           "no user in context",
+			eventID:        "ev-1",
+			body:           `{"emails":"a@example.com"}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
 		},
 		{
@@ -1288,9 +1288,9 @@ func TestScheduleController_SendEventInvitations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fake := &fakeManageScheduleService{
-				sendEventInvitationsErr:  tt.fakeErr,
-				sendEventInvitationsSent: tt.fakeSent,
+			fake := &fakeEventService{
+				sendEventInvitationsErr:    tt.fakeErr,
+				sendEventInvitationsSent:   tt.fakeSent,
 				sendEventInvitationsFailed: tt.fakeFailed,
 			}
 			ctrl := NewScheduleController(testLogger, fake)

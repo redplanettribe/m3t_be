@@ -405,7 +405,7 @@ func defaultSessionizeData() domain.SessionizeResponse {
 	}
 }
 
-func TestManageScheduleService_CreateEvent(t *testing.T) {
+func TestEventService_CreateEvent(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -478,7 +478,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
+func TestEventService_ImportSessionizeData(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -571,7 +571,7 @@ func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
+func TestEventService_ListEventsByOwner(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -625,7 +625,7 @@ func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_GetEventByID(t *testing.T) {
+func TestEventService_GetEventByID(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -710,7 +710,7 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_DeleteEvent(t *testing.T) {
+func TestEventService_DeleteEvent(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -784,7 +784,7 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
+func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -915,7 +915,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
+func TestEventService_AddEventTeamMember(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -1019,7 +1019,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
+func TestEventService_ListEventTeamMembers(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -1109,18 +1109,18 @@ func TestEventService_ListEventInvitations(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name          string
-		eventID       string
-		callerID      string
-		search        string
-		params        domain.PaginationParams
-		setupEvent    func(*fakeEventRepo)
+		name            string
+		eventID         string
+		callerID        string
+		search          string
+		params          domain.PaginationParams
+		setupEvent      func(*fakeEventRepo)
 		setupInvitation func(*fakeEventInvitationRepo)
-		wantErr       bool
-		wantForbidden bool
-		wantNotFound  bool
-		wantCount     int
-		wantTotal     int
+		wantErr         bool
+		wantForbidden   bool
+		wantNotFound    bool
+		wantCount       int
+		wantTotal       int
 	}{
 		{
 			name:     "owner lists invitations non-empty",
@@ -1149,9 +1149,9 @@ func TestEventService_ListEventInvitations(t *testing.T) {
 				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupInvitation: func(*fakeEventInvitationRepo) {},
-			wantErr:   false,
-			wantCount: 0,
-			wantTotal: 0,
+			wantErr:         false,
+			wantCount:       0,
+			wantTotal:       0,
 		},
 		{
 			name:     "owner lists with search filter",
@@ -1181,19 +1181,19 @@ func TestEventService_ListEventInvitations(t *testing.T) {
 				er.Create(ctx, &domain.Event{ID: "ev-1", Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 			},
 			setupInvitation: func(*fakeEventInvitationRepo) {},
-			wantErr:       true,
-			wantForbidden: true,
+			wantErr:         true,
+			wantForbidden:   true,
 		},
 		{
-			name:         "event not found",
-			eventID:      "ev-missing",
-			callerID:     "user-1",
-			search:       "",
-			params:       domain.PaginationParams{Page: 1, PageSize: 20},
-			setupEvent:   func(er *fakeEventRepo) {},
+			name:            "event not found",
+			eventID:         "ev-missing",
+			callerID:        "user-1",
+			search:          "",
+			params:          domain.PaginationParams{Page: 1, PageSize: 20},
+			setupEvent:      func(er *fakeEventRepo) {},
 			setupInvitation: func(*fakeEventInvitationRepo) {},
-			wantErr:      true,
-			wantNotFound: true,
+			wantErr:         true,
+			wantNotFound:    true,
 		},
 	}
 
@@ -1224,7 +1224,7 @@ func TestEventService_ListEventInvitations(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
+func TestEventService_RemoveEventTeamMember(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -1317,7 +1317,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 	}
 }
 
-func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
+func TestEventService_AddEventTeamMemberByEmail(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
 
@@ -1409,17 +1409,17 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name         string
-		eventID      string
-		ownerID      string
-		emails       []string
-		setupEvent   func(*fakeEventRepo)
-		setupUser    func(*fakeUserRepoForSchedule)
-		setupEmail   func(*fakeEmailService)
-		wantSent     int
-		wantFailed   []string
-		wantErr      bool
-		wantErrNotFound bool
+		name             string
+		eventID          string
+		ownerID          string
+		emails           []string
+		setupEvent       func(*fakeEventRepo)
+		setupUser        func(*fakeUserRepoForSchedule)
+		setupEmail       func(*fakeEmailService)
+		wantSent         int
+		wantFailed       []string
+		wantErr          bool
+		wantErrNotFound  bool
 		wantErrForbidden bool
 	}{
 		{
@@ -1433,20 +1433,20 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 			setupUser: func(ur *fakeUserRepoForSchedule) {
 				ur.addUserWithName("owner@x.com", "user-1", "Jane", "Doe")
 			},
-			setupEmail:  func(*fakeEmailService) {},
-			wantSent:    2,
-			wantFailed:  nil,
-			wantErr:     false,
+			setupEmail: func(*fakeEmailService) {},
+			wantSent:   2,
+			wantFailed: nil,
+			wantErr:    false,
 		},
 		{
-			name:    "event not found",
-			eventID: "ev-missing",
-			ownerID: "user-1",
-			emails:  []string{"a@example.com"},
-			setupEvent: func(er *fakeEventRepo) {},
-			setupUser:   func(ur *fakeUserRepoForSchedule) {},
-			setupEmail:  func(*fakeEmailService) {},
-			wantErr:     true,
+			name:            "event not found",
+			eventID:         "ev-missing",
+			ownerID:         "user-1",
+			emails:          []string{"a@example.com"},
+			setupEvent:      func(er *fakeEventRepo) {},
+			setupUser:       func(ur *fakeUserRepoForSchedule) {},
+			setupEmail:      func(*fakeEmailService) {},
+			wantErr:         true,
 			wantErrNotFound: true,
 		},
 		{
@@ -1457,9 +1457,9 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 			setupEvent: func(er *fakeEventRepo) {
 				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 			},
-			setupUser:   func(ur *fakeUserRepoForSchedule) {},
-			setupEmail:  func(*fakeEmailService) {},
-			wantErr:     true,
+			setupUser:        func(ur *fakeUserRepoForSchedule) {},
+			setupEmail:       func(*fakeEmailService) {},
+			wantErr:          true,
 			wantErrForbidden: true,
 		},
 		{
@@ -1491,11 +1491,11 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 			setupEvent: func(er *fakeEventRepo) {
 				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 			},
-			setupUser:   func(ur *fakeUserRepoForSchedule) {},
-			setupEmail:  func(*fakeEmailService) {},
-			wantSent:    0,
-			wantFailed:  nil,
-			wantErr:     false,
+			setupUser:  func(ur *fakeUserRepoForSchedule) {},
+			setupEmail: func(*fakeEmailService) {},
+			wantSent:   0,
+			wantFailed: nil,
+			wantErr:    false,
 		},
 		{
 			name:    "duplicate email in list: first sent, second failed",
@@ -1508,10 +1508,10 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 			setupUser: func(ur *fakeUserRepoForSchedule) {
 				ur.addUserWithName("owner@x.com", "user-1", "Jane", "Doe")
 			},
-			setupEmail:  func(*fakeEmailService) {},
-			wantSent:    1,
-			wantFailed:  []string{"dup@example.com"},
-			wantErr:     false,
+			setupEmail: func(*fakeEmailService) {},
+			wantSent:   1,
+			wantFailed: []string{"dup@example.com"},
+			wantErr:    false,
 		},
 	}
 

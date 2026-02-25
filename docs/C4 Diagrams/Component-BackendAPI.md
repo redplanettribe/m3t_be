@@ -13,7 +13,7 @@ Container_Boundary(api, "Backend API") {
         Component(ws_handler, "WebSocket Handler", "Socket.io/WS", "Push channel for live updates")
     }
     Boundary(core, "Application Core (Services)") {
-        Component(manage_svc, "ManageScheduleService", "Service", "Validates track times, saves sessions, notifies changes.")
+        Component(manage_svc, "EventService", "Service", "Validates track times, saves sessions, notifies changes.")
         Component(book_svc, "BookSessionService", "Service", "Checks capacity, creates booking.")
         Component(walkin_svc, "WalkInEntryService", "Service", "Allows entry if session active & seats released.")
         Component(checkin_svc, "ProcessCheckInService", "Service", "Marks attendee present, triggers count update.")

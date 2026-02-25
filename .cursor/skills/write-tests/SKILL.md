@@ -9,7 +9,7 @@ Follow [.cursor/rules/testing.mdc](.cursor/rules/testing.mdc) and [.cursor/rules
 
 ## 1. Handlers
 
-- Build the controller with a fake or mock implementing the service interface (e.g. `domain.ManageScheduleService`).
+- Build the controller with a fake or mock implementing the service interface (e.g. `domain.EventService`).
 - For each case: create request with `httptest.NewRequest`, create `httptest.ResponseRecorder`, call the handler, then use `assert`/`require` on status code and response body (e.g. decode JSON and compare, or check substring).
 - Use table-driven tests with `t.Run(tt.name, ...)`.
 

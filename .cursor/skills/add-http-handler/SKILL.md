@@ -15,7 +15,7 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, Go conventions).
 
 ## Instructions
 
-1. **Domain service**: Define or extend the service interface in `internal/domain` (e.g. `ManageScheduleService`). Add the new method signature.
+1. **Domain service**: Define or extend the service interface in `internal/domain` (e.g. `EventService`). Add the new method signature.
 
 2. **Service**: Implement the method in the appropriate service (e.g. `internal/services/manage_schedule.go`). Use `context.Context`, wrap errors with `fmt.Errorf(..., %w, err)`.
 
