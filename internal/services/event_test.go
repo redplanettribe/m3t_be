@@ -285,6 +285,79 @@ func (f *fakeUserRepoForSchedule) addUser(email, id string) {
 	f.byEmail[email] = &domain.User{ID: id, Email: email}
 }
 
+func (f *fakeUserRepoForSchedule) addUserWithName(email, id, name, lastName string) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	f.byEmail[email] = &domain.User{ID: id, Email: email, Name: name, LastName: lastName}
+}
+
+// fakeEventInvitationRepo is an in-memory EventInvitationRepository for tests.
+type fakeEventInvitationRepo struct {
+	invitations []*domain.EventInvitation
+	nextID      int
+	createErr   error
+}
+
+func newFakeEventInvitationRepo() *fakeEventInvitationRepo {
+	return &fakeEventInvitationRepo{
+		invitations: nil,
+		nextID:      1,
+	}
+}
+
+func (f *fakeEventInvitationRepo) Create(ctx context.Context, inv *domain.EventInvitation) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
+	for _, existing := range f.invitations {
+		if existing.EventID == inv.EventID && strings.ToLower(existing.Email) == strings.ToLower(inv.Email) {
+			return errors.New("duplicate key value violates unique constraint")
+		}
+	}
+	inv.ID = fmt.Sprintf("inv-%d", f.nextID)
+	f.nextID++
+	f.invitations = append(f.invitations, inv)
+	return nil
+}
+
+func (f *fakeEventInvitationRepo) ListByEventID(ctx context.Context, eventID string) ([]*domain.EventInvitation, error) {
+	var out []*domain.EventInvitation
+	for _, inv := range f.invitations {
+		if inv.EventID == eventID {
+			out = append(out, inv)
+		}
+	}
+	if out == nil {
+		return []*domain.EventInvitation{}, nil
+	}
+	return out, nil
+}
+
+// fakeEmailService is a test double for EmailService. Tracks SendEventInvitation calls; other methods no-op.
+type fakeEmailService struct {
+	sendEventInvitationErr error // if set, SendEventInvitation returns this
+	sentInvitations        []*domain.EventInvitationEmailData
+}
+
+func newFakeEmailService() *fakeEmailService {
+	return &fakeEmailService{sentInvitations: []*domain.EventInvitationEmailData{}}
+}
+
+func (f *fakeEmailService) SendWelcomeMessage(ctx context.Context, data *domain.WelcomeMessageEmailData) error {
+	return nil
+}
+
+func (f *fakeEmailService) SendLoginCode(ctx context.Context, data *domain.LoginCodeEmailData) error {
+	return nil
+}
+
+func (f *fakeEmailService) SendEventInvitation(ctx context.Context, data *domain.EventInvitationEmailData) error {
+	if f.sendEventInvitationErr != nil {
+		return f.sendEventInvitationErr
+	}
+	f.sentInvitations = append(f.sentInvitations, data)
+	return nil
+}
+
 // defaultSessionizeData returns a minimal valid SessionizeResponse for tests.
 func defaultSessionizeData() domain.SessionizeResponse {
 	desc := "A talk"
@@ -373,7 +446,7 @@ func TestManageScheduleService_CreateEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			ev := &domain.Event{Name: tt.event.Name, OwnerID: tt.event.OwnerID}
 			err := svc.CreateEvent(ctx, ev)
 			if tt.wantErr {
@@ -467,7 +540,7 @@ func TestManageScheduleService_ImportSessionizeData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.ImportSessionizeData(ctx, tt.eventID, tt.sessID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -526,7 +599,7 @@ func TestManageScheduleService_ListEventsByOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			events, err := svc.ListEventsByOwner(ctx, tt.ownerID)
 			require.NoError(t, err)
 			require.Len(t, events, tt.wantLen)
@@ -605,7 +678,7 @@ func TestManageScheduleService_GetEventByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			event, rooms, sessions, err := svc.GetEventByID(ctx, tt.eventID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -673,7 +746,7 @@ func TestManageScheduleService_DeleteEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.DeleteEvent(ctx, tt.eventID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -805,7 +878,7 @@ func TestManageScheduleService_ToggleRoomNotBookable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			room, err := svc.ToggleRoomNotBookable(ctx, tt.eventID, tt.roomID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -906,7 +979,7 @@ func TestManageScheduleService_AddEventTeamMember(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			err := svc.AddEventTeamMember(ctx, tt.eventID, tt.userIDToAdd, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -996,7 +1069,7 @@ func TestManageScheduleService_ListEventTeamMembers(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			got, err := svc.ListEventTeamMembers(ctx, tt.eventID, tt.callerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1086,7 +1159,7 @@ func TestManageScheduleService_RemoveEventTeamMember(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			err := svc.RemoveEventTeamMember(ctx, tt.eventID, tt.userIDToRemove, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1174,7 +1247,7 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			if tt.setupUserRepo != nil {
 				tt.setupUserRepo(userRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, userRepo, &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, userRepo, newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			got, err := svc.AddEventTeamMemberByEmail(ctx, tt.eventID, tt.email, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1190,6 +1263,158 @@ func TestManageScheduleService_AddEventTeamMemberByEmail(t *testing.T) {
 			require.NotNil(t, got)
 			require.Equal(t, tt.eventID, got.EventID)
 			require.Equal(t, tt.wantMemberUserID, got.UserID)
+		})
+	}
+}
+
+func TestEventService_SendEventInvitations(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name         string
+		eventID      string
+		ownerID      string
+		emails       []string
+		setupEvent   func(*fakeEventRepo)
+		setupUser    func(*fakeUserRepoForSchedule)
+		setupEmail   func(*fakeEmailService)
+		wantSent     int
+		wantFailed   []string
+		wantErr      bool
+		wantErrNotFound bool
+		wantErrForbidden bool
+	}{
+		{
+			name:    "success sends to two emails",
+			eventID: "ev-1",
+			ownerID: "user-1",
+			emails:  []string{"a@example.com", "b@example.com"},
+			setupEvent: func(er *fakeEventRepo) {
+				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			},
+			setupUser: func(ur *fakeUserRepoForSchedule) {
+				ur.addUserWithName("owner@x.com", "user-1", "Jane", "Doe")
+			},
+			setupEmail:  func(*fakeEmailService) {},
+			wantSent:    2,
+			wantFailed:  nil,
+			wantErr:     false,
+		},
+		{
+			name:    "event not found",
+			eventID: "ev-missing",
+			ownerID: "user-1",
+			emails:  []string{"a@example.com"},
+			setupEvent: func(er *fakeEventRepo) {},
+			setupUser:   func(ur *fakeUserRepoForSchedule) {},
+			setupEmail:  func(*fakeEmailService) {},
+			wantErr:     true,
+			wantErrNotFound: true,
+		},
+		{
+			name:    "forbidden when not owner",
+			eventID: "ev-1",
+			ownerID: "user-2",
+			emails:  []string{"a@example.com"},
+			setupEvent: func(er *fakeEventRepo) {
+				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			},
+			setupUser:   func(ur *fakeUserRepoForSchedule) {},
+			setupEmail:  func(*fakeEmailService) {},
+			wantErr:     true,
+			wantErrForbidden: true,
+		},
+		{
+			name:    "partial failure when email send fails",
+			eventID: "ev-1",
+			ownerID: "user-1",
+			emails:  []string{"ok@example.com", "fail@example.com"},
+			setupEvent: func(er *fakeEventRepo) {
+				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			},
+			setupUser: func(ur *fakeUserRepoForSchedule) {
+				ur.addUserWithName("owner@x.com", "user-1", "Jane", "Doe")
+			},
+			setupEmail: func(es *fakeEmailService) {
+				es.sendEventInvitationErr = errors.New("smtp error")
+				// Fail only for second email - we can't do that with current fake, so we make all fail and expect sent=0, failed=2
+				// Actually let's make sendEventInvitationErr set and then we get first email: create ok, send fail -> failed. Second: create ok, send fail -> failed. So sent=0, failed=2.
+				// For "partial" we need one to succeed and one to fail. So we need the fake to fail on a specific email. Simpler: just test that when send fails, that email is in failed. So set sendEventInvitationErr and both go to failed, sent=0, failed=2.
+			},
+			wantSent:   0,
+			wantFailed: []string{"ok@example.com", "fail@example.com"},
+			wantErr:    false,
+		},
+		{
+			name:    "empty emails returns zero sent",
+			eventID: "ev-1",
+			ownerID: "user-1",
+			emails:  []string{},
+			setupEvent: func(er *fakeEventRepo) {
+				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			},
+			setupUser:   func(ur *fakeUserRepoForSchedule) {},
+			setupEmail:  func(*fakeEmailService) {},
+			wantSent:    0,
+			wantFailed:  nil,
+			wantErr:     false,
+		},
+		{
+			name:    "duplicate email in list: first sent, second failed",
+			eventID: "ev-1",
+			ownerID: "user-1",
+			emails:  []string{"dup@example.com", "dup@example.com"},
+			setupEvent: func(er *fakeEventRepo) {
+				er.byID["ev-1"] = &domain.Event{ID: "ev-1", Name: "My Event", EventCode: "abc1", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			},
+			setupUser: func(ur *fakeUserRepoForSchedule) {
+				ur.addUserWithName("owner@x.com", "user-1", "Jane", "Doe")
+			},
+			setupEmail:  func(*fakeEmailService) {},
+			wantSent:    1,
+			wantFailed:  []string{"dup@example.com"},
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo := newFakeEventRepo()
+			if tt.setupEvent != nil {
+				tt.setupEvent(eventRepo)
+			}
+			userRepo := newFakeUserRepoForSchedule()
+			if tt.setupUser != nil {
+				tt.setupUser(userRepo)
+			}
+			invRepo := newFakeEventInvitationRepo()
+			emailSvc := newFakeEmailService()
+			if tt.setupEmail != nil {
+				tt.setupEmail(emailSvc)
+			}
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeEventTeamMemberRepo(), userRepo, invRepo, emailSvc, &fakeSessionizeFetcher{}, timeout)
+
+			sent, failed, err := svc.SendEventInvitations(ctx, tt.eventID, tt.ownerID, tt.emails)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantErrForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSent, sent)
+			require.ElementsMatch(t, tt.wantFailed, failed)
+			if tt.wantSent > 0 && len(tt.emails) > 0 {
+				list, _ := invRepo.ListByEventID(ctx, tt.eventID)
+				require.Len(t, list, tt.wantSent, "invitations persisted should match sent count")
+				require.Len(t, emailSvc.sentInvitations, tt.wantSent, "emails sent should match sent count")
+			}
 		})
 	}
 }

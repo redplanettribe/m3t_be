@@ -30,6 +30,7 @@ func NewRouter(
 	mux.HandleFunc("POST /events/{eventID}/team-members", requireAuth(scheduleController.AddEventTeamMember))
 	mux.HandleFunc("GET /events/{eventID}/team-members", requireAuth(scheduleController.ListEventTeamMembers))
 	mux.HandleFunc("DELETE /events/{eventID}/team-members/{userID}", requireAuth(scheduleController.RemoveEventTeamMember))
+	mux.HandleFunc("POST /events/{eventID}/invitations", requireAuth(scheduleController.SendEventInvitations))
 
 	// Attendee-facing (protected)
 	mux.HandleFunc("POST /attendee/events/{eventID}/registrations", requireAuth(attendeeController.RegisterForEvent))

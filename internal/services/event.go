@@ -18,6 +18,8 @@ type eventService struct {
 	sessionRepo         domain.SessionRepository
 	eventTeamMemberRepo domain.EventTeamMemberRepository
 	userRepo            domain.UserRepository
+	invitationRepo      domain.EventInvitationRepository
+	emailService        domain.EmailService
 	sessionize          domain.SessionizeFetcher
 	contextTimeout      time.Duration
 }
@@ -26,6 +28,8 @@ func NewEventService(eventRepo domain.EventRepository,
 	sessionRepo domain.SessionRepository,
 	eventTeamMemberRepo domain.EventTeamMemberRepository,
 	userRepo domain.UserRepository,
+	invitationRepo domain.EventInvitationRepository,
+	emailService domain.EmailService,
 	sessionize domain.SessionizeFetcher,
 	timeout time.Duration,
 ) domain.EventService {
@@ -34,6 +38,8 @@ func NewEventService(eventRepo domain.EventRepository,
 		sessionRepo:         sessionRepo,
 		eventTeamMemberRepo: eventTeamMemberRepo,
 		userRepo:            userRepo,
+		invitationRepo:      invitationRepo,
+		emailService:        emailService,
 		sessionize:          sessionize,
 		contextTimeout:      timeout,
 	}
@@ -354,4 +360,64 @@ func (s *eventService) RemoveEventTeamMember(ctx context.Context, eventID, userI
 		return fmt.Errorf("remove team member: %w", err)
 	}
 	return nil
+}
+
+func (s *eventService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return 0, nil, domain.ErrNotFound
+		}
+		return 0, nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return 0, nil, domain.ErrForbidden
+	}
+
+	owner, err := s.userRepo.GetByID(ctx, ownerID)
+	if err != nil || owner == nil {
+		// Proceed with empty owner name if user lookup fails
+	}
+	ownerName := "Event owner"
+	if owner != nil {
+		ownerName = strings.TrimSpace(owner.Name + " " + owner.LastName)
+		if ownerName == "" {
+			ownerName = owner.Email
+		}
+		if ownerName == "" {
+			ownerName = "Event owner"
+		}
+	}
+
+	for _, email := range emails {
+		email = strings.TrimSpace(strings.ToLower(email))
+		if email == "" {
+			continue
+		}
+		sentAt := time.Now()
+		inv := &domain.EventInvitation{
+			EventID: eventID,
+			Email:   email,
+			SentAt:  sentAt,
+		}
+		if err := s.invitationRepo.Create(ctx, inv); err != nil {
+			failed = append(failed, email)
+			continue
+		}
+		data := &domain.EventInvitationEmailData{
+			Email:     email,
+			OwnerName: ownerName,
+			EventName: event.Name,
+			EventCode: event.EventCode,
+		}
+		if err := s.emailService.SendEventInvitation(ctx, data); err != nil {
+			failed = append(failed, email)
+			continue
+		}
+		sent++
+	}
+	return sent, failed, nil
 }

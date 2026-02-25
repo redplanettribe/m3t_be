@@ -56,6 +56,13 @@ type fakeManageScheduleService struct {
 		rooms    []*domain.Room
 		sessions []*domain.Session
 	}
+	// SendEventInvitations
+	sendEventInvitationsErr    error
+	sendEventInvitationsSent   int
+	sendEventInvitationsFailed []string
+	lastSendInvitationsEventID string
+	lastSendInvitationsOwnerID string
+	lastSendInvitationsEmails  []string
 }
 
 func (f *fakeManageScheduleService) CreateEvent(ctx context.Context, event *domain.Event) error {
@@ -146,6 +153,16 @@ func (f *fakeManageScheduleService) RemoveEventTeamMember(ctx context.Context, e
 	f.lastRemoveTeamMemberUserID = userIDToRemove
 	f.lastRemoveTeamMemberOwnerID = ownerID
 	return f.removeTeamMemberErr
+}
+
+func (f *fakeManageScheduleService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
+	f.lastSendInvitationsEventID = eventID
+	f.lastSendInvitationsOwnerID = ownerID
+	f.lastSendInvitationsEmails = emails
+	if f.sendEventInvitationsErr != nil {
+		return 0, nil, f.sendEventInvitationsErr
+	}
+	return f.sendEventInvitationsSent, f.sendEventInvitationsFailed, nil
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -983,6 +1000,141 @@ func TestScheduleController_RemoveEventTeamMember(t *testing.T) {
 				assert.Equal(t, tt.eventID, fake.lastRemoveTeamMemberEventID)
 				assert.Equal(t, tt.userID, fake.lastRemoveTeamMemberUserID)
 				assert.Equal(t, "user-123", fake.lastRemoveTeamMemberOwnerID)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_SendEventInvitations(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		body           string
+		fakeErr        error
+		fakeSent       int
+		fakeFailed     []string
+		wantStatus     int
+		wantBodySubstr string
+		noUserContext  bool
+		checkCall      func(t *testing.T, fake *fakeManageScheduleService)
+		checkData      func(t *testing.T, data SendEventInvitationsResponse)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			body:       `{"emails":"a@example.com, b@example.com"}`,
+			fakeSent:   2,
+			fakeFailed: nil,
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeManageScheduleService) {
+				assert.Equal(t, "ev-1", fake.lastSendInvitationsEventID)
+				assert.Equal(t, "user-123", fake.lastSendInvitationsOwnerID)
+				require.Len(t, fake.lastSendInvitationsEmails, 2)
+				assert.Contains(t, fake.lastSendInvitationsEmails, "a@example.com")
+				assert.Contains(t, fake.lastSendInvitationsEmails, "b@example.com")
+			},
+			checkData: func(t *testing.T, data SendEventInvitationsResponse) {
+				assert.Equal(t, 2, data.Sent)
+				assert.Nil(t, data.Failed)
+			},
+		},
+		{
+			name:       "success with partial failures",
+			eventID:    "ev-1",
+			body:       `{"emails":"ok@x.com fail@x.com"}`,
+			fakeSent:   1,
+			fakeFailed: []string{"fail@x.com"},
+			wantStatus: http.StatusOK,
+			checkData: func(t *testing.T, data SendEventInvitationsResponse) {
+				assert.Equal(t, 1, data.Sent)
+				require.Len(t, data.Failed, 1)
+				assert.Equal(t, "fail@x.com", data.Failed[0])
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			body:           `{"emails":"a@example.com"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:           "empty emails",
+			eventID:        "ev-1",
+			body:           `{"emails":""}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "emails is required",
+		},
+		{
+			name:           "no valid emails after parse",
+			eventID:        "ev-1",
+			body:           `{"emails":"not-valid, also-invalid"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "no valid emails",
+		},
+		{
+			name:          "no user in context",
+			eventID:       "ev-1",
+			body:          `{"emails":"a@example.com"}`,
+			noUserContext: true,
+			wantStatus:    http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			body:           `{"emails":"a@example.com"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			body:           `{"emails":"a@example.com"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeManageScheduleService{
+				sendEventInvitationsErr:  tt.fakeErr,
+				sendEventInvitationsSent: tt.fakeSent,
+				sendEventInvitationsFailed: tt.fakeFailed,
+			}
+			ctrl := NewScheduleController(testLogger, fake)
+			req := httptest.NewRequest(http.MethodPost, "http://test/events/"+tt.eventID+"/invitations", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.SendEventInvitations(rr, req)
+
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK {
+				require.Nil(t, envelope.Error)
+				if tt.checkCall != nil {
+					tt.checkCall(t, fake)
+				}
+				if tt.checkData != nil {
+					dataBytes, err := json.Marshal(envelope.Data)
+					require.NoError(t, err)
+					var data SendEventInvitationsResponse
+					require.NoError(t, json.Unmarshal(dataBytes, &data))
+					tt.checkData(t, data)
+				}
 			}
 			if tt.wantBodySubstr != "" && envelope.Error != nil {
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)

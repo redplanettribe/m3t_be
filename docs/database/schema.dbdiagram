@@ -8,61 +8,67 @@
       "name": "events",
       "schemaName": "public",
       "x": 488,
-      "y": 16
+      "y": 288
     },
     {
       "name": "rooms",
       "schemaName": "public",
       "x": 984,
-      "y": 16
+      "y": 288
     },
     {
       "name": "sessions",
       "schemaName": "public",
       "x": 1472,
-      "y": 16
+      "y": 288
     },
     {
       "name": "session_tags",
       "schemaName": "public",
       "x": 2000,
-      "y": 16
+      "y": 288
     },
     {
       "name": "users",
       "schemaName": "public",
       "x": 16,
-      "y": 16
+      "y": 288
     },
     {
       "name": "login_codes",
       "schemaName": "public",
-      "x": 484.731689453125,
-      "y": -276.7350725446429
+      "x": 16,
+      "y": 16
     },
     {
       "name": "event_team_members",
       "schemaName": "public",
       "x": 984,
-      "y": 312
+      "y": 800
     },
     {
       "name": "roles",
       "schemaName": "public",
       "x": 16,
-      "y": 344
+      "y": 560
     },
     {
       "name": "user_roles",
       "schemaName": "public",
       "x": 488,
-      "y": 280
+      "y": 560
     },
     {
       "name": "event_registrations",
       "schemaName": "public",
-      "x": 851.4369979334144,
-      "y": 719.0712195034903
+      "x": 984,
+      "y": 944
+    },
+    {
+      "name": "event_invitations",
+      "schemaName": "public",
+      "x": 984,
+      "y": 592
     }
   ],
   "tableGroupCollapseStates": [],
@@ -214,6 +220,21 @@
         "user_id"
       ],
       "secondTableName": "event_registrations",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "events",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "event_id"
+      ],
+      "secondTableName": "event_invitations",
       "secondSchemaName": "public",
       "secondRelation": "*",
       "checkPoints": []

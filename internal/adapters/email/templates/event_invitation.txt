@@ -1,0 +1,7 @@
+You're invited to register for {{.EventName}}.
+
+{{.OwnerName}} has invited you to this event.
+
+Event code: {{.EventCode}}
+
+To register, open the app and enter the event code above. You'll be able to sign up for the event and manage your schedule.

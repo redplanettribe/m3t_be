@@ -27,8 +27,17 @@ type LoginCodeEmailData struct {
 	ExpiresInMinutes  int
 }
 
+// EventInvitationEmailData holds data for the event invitation email.
+type EventInvitationEmailData struct {
+	Email      string
+	OwnerName  string
+	EventName  string
+	EventCode  string
+}
+
 // EmailService defines the contract for sending domain-level emails.
 type EmailService interface {
 	SendWelcomeMessage(ctx context.Context, data *WelcomeMessageEmailData) error
 	SendLoginCode(ctx context.Context, data *LoginCodeEmailData) error
+	SendEventInvitation(ctx context.Context, data *EventInvitationEmailData) error
 }

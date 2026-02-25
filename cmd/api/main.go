@@ -56,25 +56,12 @@ func main() {
 	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
 	eventTeamMemberRepo := postgres.NewEventTeamMemberRepository(db)
+	eventInvitationRepo := postgres.NewEventInvitationRepository(db)
 	eventRegistrationRepo := postgres.NewEventRegistrationRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	roleRepo := postgres.NewRoleRepository(db)
 	loginCodeRepo := postgres.NewLoginCodeRepository(db)
 	sessionizeFetcher := sessionize.NewHTTPFetcher(nil)
-	manageScheduleService := services.NewEventService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, sessionizeFetcher, 10*time.Second)
-	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
-	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo)
-	attendeeController := controllers.NewAttendeeController(logger, attendeeService)
-
-	jwtSecret := cfg.JWTSecret
-	if jwtSecret == "" {
-		if cfg.Environment == "production" {
-			logger.Error("JWT_SECRET is required in production")
-			os.Exit(1)
-		}
-		jwtSecret = "dev-secret-change-in-production"
-	}
-	jwtAuth := auth.NewJWTIssuer(jwtSecret, cfg.JWTExpiry)
 
 	mailerCfg := email.MailerConfig{
 		Provider:    cfg.Email.Provider,
@@ -94,6 +81,22 @@ func main() {
 	}
 	templateRenderer := email.NewTemplateRenderer()
 	emailService := services.NewEmailService(mailer, templateRenderer)
+
+	manageScheduleService := services.NewEventService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, eventInvitationRepo, emailService, sessionizeFetcher, 10*time.Second)
+	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
+	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo)
+	attendeeController := controllers.NewAttendeeController(logger, attendeeService)
+
+	jwtSecret := cfg.JWTSecret
+	if jwtSecret == "" {
+		if cfg.Environment == "production" {
+			logger.Error("JWT_SECRET is required in production")
+			os.Exit(1)
+		}
+		jwtSecret = "dev-secret-change-in-production"
+	}
+	jwtAuth := auth.NewJWTIssuer(jwtSecret, cfg.JWTExpiry)
+
 	userService := services.NewUserService(userRepo, roleRepo, loginCodeRepo, jwtAuth, cfg.JWTExpiry, emailService)
 	userController := controllers.NewUserController(logger, userService)
 	requireAuth := middleware.RequireAuth(jwtAuth, logger)

@@ -142,6 +142,27 @@ definitions:
       email:
         type: string
     type: object
+  controllers.SendEventInvitationsRequest:
+    properties:
+      emails:
+        type: string
+    type: object
+  controllers.SendEventInvitationsResponse:
+    properties:
+      failed:
+        items:
+          type: string
+        type: array
+      sent:
+        type: integer
+    type: object
+  controllers.SendEventInvitationsSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.SendEventInvitationsResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.ToggleRoomNotBookableSuccessResponse:
     properties:
       data:
@@ -559,6 +580,58 @@ paths:
       security:
       - BearerAuth: []
       summary: Import schedule from Sessionize
+      tags:
+      - events
+  /events/{eventID}/invitations:
+    post:
+      consumes:
+      - application/json
+      description: Send invitation emails to register for the event. Body contains
+        a string of emails separated by commas or spaces. Only the event owner can
+        invite. Each invitation is persisted and emailed; duplicates for the same
+        event are skipped. Returns count of sent and list of failed addresses.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Emails string (comma or space separated)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.SendEventInvitationsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains sent count and failed list
+          schema:
+            $ref: '#/definitions/controllers.SendEventInvitationsSuccessResponse'
+        "400":
+          description: 'error.code: bad_request (empty or no valid emails)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Send event invitation emails
       tags:
       - events
   /events/{eventID}/rooms/{roomID}/not-bookable:

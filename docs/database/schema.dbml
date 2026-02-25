@@ -118,3 +118,15 @@ Table event_registrations {
     user_id
   }
 }
+
+Table event_invitations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  event_id uuid [not null, ref: > events.id]
+  email varchar(255) [not null]
+  sent_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (event_id, email) [unique]
+    event_id
+  }
+}

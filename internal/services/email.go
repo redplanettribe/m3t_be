@@ -49,3 +49,19 @@ func (s *emailService) SendLoginCode(ctx context.Context, data *domain.LoginCode
 	log.Printf("[EMAIL] Login code sent to %s", data.Email)
 	return nil
 }
+
+// SendEventInvitation sends the event invitation email using the "event_invitation" template.
+func (s *emailService) SendEventInvitation(ctx context.Context, data *domain.EventInvitationEmailData) error {
+	if data == nil {
+		return fmt.Errorf("event invitation email data is nil")
+	}
+	subject, htmlBody, textBody, err := s.renderer.Render("event_invitation", data)
+	if err != nil {
+		return fmt.Errorf("failed to render event_invitation template: %w", err)
+	}
+	if err := s.mailer.Send(data.Email, subject, htmlBody, textBody); err != nil {
+		return fmt.Errorf("failed to send event invitation email: %w", err)
+	}
+	log.Printf("[EMAIL] Event invitation sent to %s", data.Email)
+	return nil
+}

@@ -490,3 +490,106 @@ func (c *ScheduleController) RemoveEventTeamMember(w http.ResponseWriter, r *htt
 	}
 	helpers.WriteJSONSuccess(w, http.StatusOK, RemoveEventTeamMemberResponse{Status: "removed"})
 }
+
+// SendEventInvitationsRequest is the request body for POST /events/{eventID}/invitations.
+// Emails is a long string of emails separated by commas or spaces.
+type SendEventInvitationsRequest struct {
+	Emails string `json:"emails"`
+}
+
+// Validate implements Validator.
+func (s SendEventInvitationsRequest) Validate() []string {
+	if strings.TrimSpace(s.Emails) == "" {
+		return []string{"emails is required"}
+	}
+	return nil
+}
+
+// parseEmailsFromString splits the input by commas and spaces, trims, lowercases, deduplicates,
+// and returns only strings that match emailRegex. May return an empty slice.
+func parseEmailsFromString(raw string) []string {
+	raw = strings.ReplaceAll(raw, ",", " ")
+	parts := strings.Fields(raw)
+	seen := make(map[string]struct{})
+	var out []string
+	for _, p := range parts {
+		email := strings.TrimSpace(strings.ToLower(p))
+		if email == "" {
+			continue
+		}
+		if !emailRegex.MatchString(email) {
+			continue
+		}
+		if _, ok := seen[email]; ok {
+			continue
+		}
+		seen[email] = struct{}{}
+		out = append(out, email)
+	}
+	return out
+}
+
+// SendEventInvitationsResponse is the data payload for POST /events/{eventID}/invitations (200).
+type SendEventInvitationsResponse struct {
+	Sent  int      `json:"sent"`
+	Failed []string `json:"failed"`
+}
+
+// SendEventInvitationsSuccessResponse is the success response envelope for POST /events/{eventID}/invitations (200).
+type SendEventInvitationsSuccessResponse struct {
+	Data  SendEventInvitationsResponse `json:"data"`
+	Error *helpers.APIError            `json:"error"`
+}
+
+// SendEventInvitations godoc
+// @Summary Send event invitation emails
+// @Description Send invitation emails to register for the event. Body contains a string of emails separated by commas or spaces. Only the event owner can invite. Each invitation is persisted and emailed; duplicates for the same event are skipped. Returns count of sent and list of failed addresses.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body SendEventInvitationsRequest true "Emails string (comma or space separated)"
+// @Success 200 {object} controllers.SendEventInvitationsSuccessResponse "data contains sent count and failed list"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request (empty or no valid emails)"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/invitations [post]
+func (c *ScheduleController) SendEventInvitations(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	var req SendEventInvitationsRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	emails := parseEmailsFromString(req.Emails)
+	if len(emails) == 0 {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "no valid emails found")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	sent, failed, err := c.Service.SendEventInvitations(r.Context(), eventID, ownerID, emails)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, SendEventInvitationsResponse{Sent: sent, Failed: failed})
+}
