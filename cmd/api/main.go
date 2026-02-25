@@ -84,7 +84,7 @@ func main() {
 
 	manageScheduleService := services.NewEventService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, eventInvitationRepo, emailService, sessionizeFetcher, 10*time.Second)
 	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
-	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo)
+	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo, sessionRepo)
 	attendeeController := controllers.NewAttendeeController(logger, attendeeService)
 
 	jwtSecret := cfg.JWTSecret

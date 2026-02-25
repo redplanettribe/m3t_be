@@ -63,6 +63,13 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.GetEventScheduleSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.EventSchedule'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.GetMeSuccessResponse:
     properties:
       data:
@@ -325,6 +332,15 @@ definitions:
       user_id:
         type: string
     type: object
+  domain.EventSchedule:
+    properties:
+      event:
+        $ref: '#/definitions/domain.Event'
+      rooms:
+        items:
+          $ref: '#/definitions/domain.RoomWithSessions'
+        type: array
+    type: object
   domain.EventTeamMember:
     properties:
       email:
@@ -360,6 +376,15 @@ definitions:
         type: integer
       updated_at:
         type: string
+    type: object
+  domain.RoomWithSessions:
+    properties:
+      room:
+        $ref: '#/definitions/domain.Room'
+      sessions:
+        items:
+          $ref: '#/definitions/domain.Session'
+        type: array
     type: object
   domain.Session:
     properties:
@@ -497,6 +522,49 @@ paths:
       security:
       - BearerAuth: []
       summary: Register the current attendee for an event
+      tags:
+      - attendee
+  /attendee/events/{eventID}/schedule:
+    get:
+      description: Returns the event schedule (event plus bookable rooms with nested
+        sessions) for the specified event. Only registered attendees or the event
+        owner may access this. Only rooms with not_bookable=false are included.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains event and rooms (bookable only) with nested sessions
+          schema:
+            $ref: '#/definitions/controllers.GetEventScheduleSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not registered or owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get event schedule for a registered attendee
       tags:
       - attendee
   /attendee/registrations:

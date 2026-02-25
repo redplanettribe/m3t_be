@@ -208,3 +208,58 @@ func (c *AttendeeController) ListMyRegisteredEvents(w http.ResponseWriter, r *ht
 	helpers.WriteJSONSuccess(w, http.StatusOK, responseItems)
 }
 
+// GetEventScheduleSuccessResponse is the success response envelope for GET /attendee/events/{eventID}/schedule (200).
+type GetEventScheduleSuccessResponse struct {
+	Data  *domain.EventSchedule `json:"data"`
+	Error *helpers.APIError     `json:"error"`
+}
+
+// GetEventSchedule godoc
+// @Summary Get event schedule for a registered attendee
+// @Description Returns the event schedule (event plus bookable rooms with nested sessions) for the specified event. Only registered attendees or the event owner may access this. Only rooms with not_bookable=false are included.
+// @Tags attendee
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} controllers.GetEventScheduleSuccessResponse "data contains event and rooms (bookable only) with nested sessions"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not registered or owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /attendee/events/{eventID}/schedule [get]
+func (c *AttendeeController) GetEventSchedule(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	if !uuidRegexAttendee.MatchString(eventID) {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "invalid eventID")
+		return
+	}
+
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	schedule, err := c.Service.GetEventSchedule(r.Context(), eventID, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+
+	helpers.WriteJSONSuccess(w, http.StatusOK, schedule)
+}
+

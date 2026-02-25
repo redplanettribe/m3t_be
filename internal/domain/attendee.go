@@ -38,6 +38,18 @@ type EventRegistrationWithEvent struct {
 	Event        *Event `json:"event"`
 }
 
+// RoomWithSessions is a room with its nested sessions (for hierarchical schedule response).
+type RoomWithSessions struct {
+	Room     *Room     `json:"room"`
+	Sessions []*Session `json:"sessions"`
+}
+
+// EventSchedule is the hierarchical schedule for an event: event plus bookable rooms each with nested sessions.
+type EventSchedule struct {
+	Event *Event             `json:"event"`
+	Rooms []*RoomWithSessions `json:"rooms"`
+}
+
 // AttendeeService defines attendee-facing operations such as event registration.
 type AttendeeService interface {
 	// RegisterForEvent registers the user for the event. Returns (reg, created, err): created is true if a new registration was created, false if already registered.
@@ -45,5 +57,7 @@ type AttendeeService interface {
 	// RegisterForEventByCode registers the user for the event identified by event_code. Returns (reg, created, err): created is true if a new registration was created, false if already registered.
 	RegisterForEventByCode(ctx context.Context, eventCode, userID string) (*EventRegistration, bool, error)
 	ListMyRegisteredEvents(ctx context.Context, userID string) ([]*EventRegistrationWithEvent, error)
+	// GetEventSchedule returns the event schedule (event + bookable rooms with nested sessions) for a registered attendee or event owner. Returns ErrForbidden if caller is not registered and not owner, ErrNotFound if event does not exist.
+	GetEventSchedule(ctx context.Context, eventID, userID string) (*EventSchedule, error)
 }
 

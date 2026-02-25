@@ -19,9 +19,11 @@ import (
 type mockAttendeeService struct {
 	registrations        []*domain.EventRegistrationWithEvent
 	err                  error
-	registerByCodeReg   *domain.EventRegistration
-	registerByCodeErr   error
+	registerByCodeReg    *domain.EventRegistration
+	registerByCodeErr    error
 	registerByCodeCreated bool
+	getEventScheduleResult *domain.EventSchedule
+	getEventScheduleErr   error
 }
 
 func (m *mockAttendeeService) RegisterForEvent(ctx context.Context, eventID, userID string) (*domain.EventRegistration, bool, error) {
@@ -40,6 +42,13 @@ func (m *mockAttendeeService) ListMyRegisteredEvents(ctx context.Context, userID
 		return nil, m.err
 	}
 	return m.registrations, nil
+}
+
+func (m *mockAttendeeService) GetEventSchedule(ctx context.Context, eventID, userID string) (*domain.EventSchedule, error) {
+	if m.getEventScheduleErr != nil {
+		return nil, m.getEventScheduleErr
+	}
+	return m.getEventScheduleResult, nil
 }
 
 func TestAttendeeController_ListMyRegisteredEvents_Unauthorized(t *testing.T) {
@@ -215,6 +224,132 @@ func TestAttendeeController_RegisterForEventByCode(t *testing.T) {
 				if _, ok := dataMap["id"]; !ok {
 					t.Error("expected data to contain id")
 				}
+			}
+		})
+	}
+}
+
+func TestAttendeeController_GetEventSchedule(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	eventID := "550e8400-e29b-41d4-a716-446655440000"
+
+	tests := []struct {
+		name        string
+		eventID     string
+		setUserID   bool
+		svc         *mockAttendeeService
+		wantStatus  int
+		wantErrCode string
+		checkData   func(t *testing.T, data interface{})
+	}{
+		{
+			name:      "success returns hierarchical schedule",
+			eventID:   eventID,
+			setUserID: true,
+			svc: &mockAttendeeService{
+				getEventScheduleResult: &domain.EventSchedule{
+					Event: &domain.Event{ID: eventID, Name: "Test Event"},
+					Rooms: []*domain.RoomWithSessions{
+						{
+							Room:     &domain.Room{ID: "r1", Name: "Room A", NotBookable: false},
+							Sessions: []*domain.Session{{ID: "s1", Title: "Talk 1", RoomID: "r1"}},
+						},
+					},
+				},
+			},
+			wantStatus: http.StatusOK,
+			checkData: func(t *testing.T, data interface{}) {
+				m, ok := data.(map[string]interface{})
+				if !ok {
+					t.Fatalf("expected data map, got %T", data)
+				}
+				if m["event"] == nil {
+					t.Error("expected data.event")
+				}
+				rooms, ok := m["rooms"].([]interface{})
+				if !ok || len(rooms) != 1 {
+					t.Errorf("expected data.rooms with 1 room, got %v", m["rooms"])
+				}
+			},
+		},
+		{
+			name:       "unauthorized when no user in context",
+			eventID:    eventID,
+			setUserID:  false,
+			svc:        &mockAttendeeService{},
+			wantStatus: http.StatusUnauthorized,
+			wantErrCode: helpers.ErrCodeUnauthorized,
+		},
+		{
+			name:       "forbidden when not registered or owner",
+			eventID:    eventID,
+			setUserID:  true,
+			svc:        &mockAttendeeService{getEventScheduleErr: domain.ErrForbidden},
+			wantStatus: http.StatusForbidden,
+			wantErrCode: helpers.ErrCodeForbidden,
+		},
+		{
+			name:       "not found when event does not exist",
+			eventID:    eventID,
+			setUserID:  true,
+			svc:        &mockAttendeeService{getEventScheduleErr: domain.ErrNotFound},
+			wantStatus: http.StatusNotFound,
+			wantErrCode: helpers.ErrCodeNotFound,
+		},
+		{
+			name:       "bad request when eventID missing",
+			eventID:    "",
+			setUserID:  true,
+			svc:        &mockAttendeeService{},
+			wantStatus: http.StatusBadRequest,
+			wantErrCode: helpers.ErrCodeBadRequest,
+		},
+		{
+			name:       "bad request when eventID invalid UUID",
+			eventID:    "not-a-uuid",
+			setUserID:  true,
+			svc:        &mockAttendeeService{},
+			wantStatus: http.StatusBadRequest,
+			wantErrCode: helpers.ErrCodeBadRequest,
+		},
+		{
+			name:       "internal error on service failure",
+			eventID:    eventID,
+			setUserID:  true,
+			svc:        &mockAttendeeService{getEventScheduleErr: errors.New("db error")},
+			wantStatus: http.StatusInternalServerError,
+			wantErrCode: helpers.ErrCodeInternalError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := NewAttendeeController(logger, tt.svc)
+			path := "/attendee/events/" + tt.eventID + "/schedule"
+			if tt.eventID == "" {
+				path = "/attendee/events//schedule"
+			}
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.SetPathValue("eventID", tt.eventID)
+			if tt.setUserID {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "u1"))
+			}
+			w := httptest.NewRecorder()
+
+			ctrl.GetEventSchedule(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status: want %d, got %d", tt.wantStatus, w.Code)
+			}
+			var resp helpers.APIResponse
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+			if tt.wantErrCode != "" && (resp.Error == nil || resp.Error.Code != tt.wantErrCode) {
+				t.Errorf("error code: want %q, got %v", tt.wantErrCode, resp.Error)
+			}
+			if tt.checkData != nil && resp.Data != nil {
+				tt.checkData(t, resp.Data)
 			}
 		})
 	}

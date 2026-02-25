@@ -42,6 +42,7 @@ func NewRouter(
 	mux.HandleFunc("POST /attendee/registrations", requireAuth(attendeeController.RegisterForEventByCode))
 	mux.HandleFunc("POST /attendee/events/{eventID}/registrations", requireAuth(attendeeController.RegisterForEvent))
 	mux.HandleFunc("GET /attendee/events", requireAuth(attendeeController.ListMyRegisteredEvents))
+	mux.HandleFunc("GET /attendee/events/{eventID}/schedule", requireAuth(attendeeController.GetEventSchedule))
 
 	// Auth (passwordless: request code then verify)
 	mux.HandleFunc("POST /auth/login/request", userController.RequestLoginCode)

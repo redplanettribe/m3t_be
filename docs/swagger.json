@@ -110,6 +110,70 @@
                 }
             }
         },
+        "/attendee/events/{eventID}/schedule": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the event schedule (event plus bookable rooms with nested sessions) for the specified event. Only registered attendees or the event owner may access this. Only rooms with not_bookable=false are included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "attendee"
+                ],
+                "summary": "Get event schedule for a registered attendee",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID (UUID)",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "data contains event and rooms (bookable only) with nested sessions",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GetEventScheduleSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "error.code: bad_request",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "error.code: unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "error.code: forbidden (not registered or owner)",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "error.code: not_found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "error.code: internal_error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/attendee/registrations": {
             "post": {
                 "security": [
@@ -1529,6 +1593,17 @@
                 }
             }
         },
+        "controllers.GetEventScheduleSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.EventSchedule"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
         "controllers.GetMeSuccessResponse": {
             "type": "object",
             "properties": {
@@ -1938,6 +2013,20 @@
                 }
             }
         },
+        "domain.EventSchedule": {
+            "type": "object",
+            "properties": {
+                "event": {
+                    "$ref": "#/definitions/domain.Event"
+                },
+                "rooms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.RoomWithSessions"
+                    }
+                }
+            }
+        },
         "domain.EventTeamMember": {
             "type": "object",
             "properties": {
@@ -1990,6 +2079,20 @@
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "domain.RoomWithSessions": {
+            "type": "object",
+            "properties": {
+                "room": {
+                    "$ref": "#/definitions/domain.Room"
+                },
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Session"
+                    }
                 }
             }
         },

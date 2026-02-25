@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,18 +11,21 @@ import (
 )
 
 type attendeeService struct {
-	eventRepo         domain.EventRepository
-	registrationRepo  domain.EventRegistrationRepository
+	eventRepo        domain.EventRepository
+	registrationRepo domain.EventRegistrationRepository
+	sessionRepo      domain.SessionRepository
 }
 
 // NewAttendeeService creates an AttendeeService with the given repositories.
 func NewAttendeeService(
 	eventRepo domain.EventRepository,
 	registrationRepo domain.EventRegistrationRepository,
+	sessionRepo domain.SessionRepository,
 ) domain.AttendeeService {
 	return &attendeeService{
 		eventRepo:        eventRepo,
 		registrationRepo: registrationRepo,
+		sessionRepo:      sessionRepo,
 	}
 }
 
@@ -109,5 +113,78 @@ func (s *attendeeService) ListMyRegisteredEvents(ctx context.Context, userID str
 		result = []*domain.EventRegistrationWithEvent{}
 	}
 	return result, nil
+}
+
+func (s *attendeeService) GetEventSchedule(ctx context.Context, eventID, userID string) (*domain.EventSchedule, error) {
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+
+	// Allow event owner or registered attendee.
+	if event.OwnerID != userID {
+		_, err := s.registrationRepo.GetByEventAndUser(ctx, eventID, userID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, domain.ErrForbidden
+			}
+			return nil, fmt.Errorf("get event registration: %w", err)
+		}
+	}
+
+	rooms, err := s.sessionRepo.ListRoomsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list rooms: %w", err)
+	}
+
+	// Filter to bookable rooms only (not_bookable == false).
+	var bookableRooms []*domain.Room
+	bookableIDs := make(map[string]struct{})
+	for _, r := range rooms {
+		if !r.NotBookable {
+			bookableRooms = append(bookableRooms, r)
+			bookableIDs[r.ID] = struct{}{}
+		}
+	}
+	if bookableRooms == nil {
+		bookableRooms = []*domain.Room{}
+	}
+
+	sessions, err := s.sessionRepo.ListSessionsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	if sessions == nil {
+		sessions = []*domain.Session{}
+	}
+
+	// Group sessions by room_id; only include sessions for bookable rooms.
+	sessionsByRoom := make(map[string][]*domain.Session)
+	for _, sess := range sessions {
+		if _, ok := bookableIDs[sess.RoomID]; ok {
+			sessionsByRoom[sess.RoomID] = append(sessionsByRoom[sess.RoomID], sess)
+		}
+	}
+
+	// Build hierarchical result: event + rooms (bookable only), each with nested sessions.
+	roomWithSessions := make([]*domain.RoomWithSessions, 0, len(bookableRooms))
+	for _, room := range bookableRooms {
+		sessList := sessionsByRoom[room.ID]
+		if sessList == nil {
+			sessList = []*domain.Session{}
+		}
+		roomWithSessions = append(roomWithSessions, &domain.RoomWithSessions{
+			Room:     room,
+			Sessions: sessList,
+		})
+	}
+
+	return &domain.EventSchedule{
+		Event: event,
+		Rooms: roomWithSessions,
+	}, nil
 }
 
