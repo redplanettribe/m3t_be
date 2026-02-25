@@ -141,6 +141,18 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.RegisterForEventByCodeRequest:
+    properties:
+      event_code:
+        type: string
+    type: object
+  controllers.RegisterForEventSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.EventRegistration'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.RemoveEventTeamMemberResponse:
     properties:
       status:
@@ -373,8 +385,9 @@ paths:
       - attendee
   /attendee/events/{eventID}/registrations:
     post:
-      description: Registers the authenticated user as an attendee for the specified
-        event. Idempotent if already registered.
+      description: 'Registers the authenticated user as an attendee for the specified
+        event. Idempotent: returns 201 when a new registration is created, 200 when
+        already registered.'
       parameters:
       - description: Event ID (UUID)
         in: path
@@ -384,10 +397,14 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: data contains the event registration
+        "200":
+          description: Already registered
           schema:
-            $ref: '#/definitions/helpers.APIResponse'
+            $ref: '#/definitions/controllers.RegisterForEventSuccessResponse'
+        "201":
+          description: New registration created
+          schema:
+            $ref: '#/definitions/controllers.RegisterForEventSuccessResponse'
         "400":
           description: 'error.code: bad_request'
           schema:
@@ -407,6 +424,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Register the current attendee for an event
+      tags:
+      - attendee
+  /attendee/registrations:
+    post:
+      consumes:
+      - application/json
+      description: 'Registers the authenticated user as an attendee for the event
+        with the given event_code. Idempotent: returns 201 when a new registration
+        is created, 200 when already registered.'
+      parameters:
+      - description: Event code (4 characters)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.RegisterForEventByCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Already registered
+          schema:
+            $ref: '#/definitions/controllers.RegisterForEventSuccessResponse'
+        "201":
+          description: New registration created
+          schema:
+            $ref: '#/definitions/controllers.RegisterForEventSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Register for an event by event code
       tags:
       - attendee
   /auth/login/request:

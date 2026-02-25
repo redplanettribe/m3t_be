@@ -34,6 +34,7 @@ func NewRouter(
 	mux.HandleFunc("POST /events/{eventID}/invitations", requireAuth(scheduleController.SendEventInvitations))
 
 	// Attendee-facing (protected)
+	mux.HandleFunc("POST /attendee/registrations", requireAuth(attendeeController.RegisterForEventByCode))
 	mux.HandleFunc("POST /attendee/events/{eventID}/registrations", requireAuth(attendeeController.RegisterForEvent))
 	mux.HandleFunc("GET /attendee/events", requireAuth(attendeeController.ListMyRegisteredEvents))
 

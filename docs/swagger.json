@@ -53,7 +53,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Registers the authenticated user as an attendee for the specified event. Idempotent if already registered.",
+                "description": "Registers the authenticated user as an attendee for the specified event. Idempotent: returns 201 when a new registration is created, 200 when already registered.",
                 "produces": [
                     "application/json"
                 ],
@@ -71,10 +71,85 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Already registered",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.RegisterForEventSuccessResponse"
+                        }
+                    },
                     "201": {
-                        "description": "data contains the event registration",
+                        "description": "New registration created",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.RegisterForEventSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "error.code: bad_request",
                         "schema": {
                             "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "error.code: unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "error.code: not_found",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "error.code: internal_error",
+                        "schema": {
+                            "$ref": "#/definitions/helpers.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendee/registrations": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Registers the authenticated user as an attendee for the event with the given event_code. Idempotent: returns 201 when a new registration is created, 200 when already registered.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "attendee"
+                ],
+                "summary": "Register for an event by event code",
+                "parameters": [
+                    {
+                        "description": "Event code (4 characters)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.RegisterForEventByCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Already registered",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.RegisterForEventSuccessResponse"
+                        }
+                    },
+                    "201": {
+                        "description": "New registration created",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.RegisterForEventSuccessResponse"
                         }
                     },
                     "400": {
@@ -1211,6 +1286,25 @@
             "properties": {
                 "data": {
                     "$ref": "#/definitions/controllers.LoginResponse"
+                },
+                "error": {
+                    "$ref": "#/definitions/helpers.APIError"
+                }
+            }
+        },
+        "controllers.RegisterForEventByCodeRequest": {
+            "type": "object",
+            "properties": {
+                "event_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.RegisterForEventSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/domain.EventRegistration"
                 },
                 "error": {
                     "$ref": "#/definitions/helpers.APIError"

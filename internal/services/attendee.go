@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"multitrackticketing/internal/domain"
@@ -24,28 +25,52 @@ func NewAttendeeService(
 	}
 }
 
-func (s *attendeeService) RegisterForEvent(ctx context.Context, eventID, userID string) (*domain.EventRegistration, error) {
+func (s *attendeeService) RegisterForEvent(ctx context.Context, eventID, userID string) (*domain.EventRegistration, bool, error) {
 	// Ensure the event exists.
 	if _, err := s.eventRepo.GetByID(ctx, eventID); err != nil {
 		if err == domain.ErrNotFound {
-			return nil, domain.ErrNotFound
+			return nil, false, domain.ErrNotFound
 		}
-		return nil, fmt.Errorf("get event: %w", err)
+		return nil, false, fmt.Errorf("get event: %w", err)
 	}
 
 	// Check if the user is already registered; make registration idempotent.
 	if existing, err := s.registrationRepo.GetByEventAndUser(ctx, eventID, userID); err == nil {
-		return existing, nil
+		return existing, false, nil
 	} else if err != domain.ErrNotFound {
-		return nil, fmt.Errorf("get event registration: %w", err)
+		return nil, false, fmt.Errorf("get event registration: %w", err)
 	}
 
 	now := time.Now()
 	reg := domain.NewEventRegistration(eventID, userID, now, now)
 	if err := s.registrationRepo.Create(ctx, reg); err != nil {
-		return nil, fmt.Errorf("create event registration: %w", err)
+		return nil, false, fmt.Errorf("create event registration: %w", err)
 	}
-	return reg, nil
+	return reg, true, nil
+}
+
+func (s *attendeeService) RegisterForEventByCode(ctx context.Context, eventCode, userID string) (*domain.EventRegistration, bool, error) {
+	code := strings.ToLower(strings.TrimSpace(eventCode))
+	event, err := s.eventRepo.GetByEventCode(ctx, code)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, false, domain.ErrNotFound
+		}
+		return nil, false, fmt.Errorf("get event by code: %w", err)
+	}
+
+	if existing, err := s.registrationRepo.GetByEventAndUser(ctx, event.ID, userID); err == nil {
+		return existing, false, nil
+	} else if err != domain.ErrNotFound {
+		return nil, false, fmt.Errorf("get event registration: %w", err)
+	}
+
+	now := time.Now()
+	reg := domain.NewEventRegistration(event.ID, userID, now, now)
+	if err := s.registrationRepo.Create(ctx, reg); err != nil {
+		return nil, false, fmt.Errorf("create event registration: %w", err)
+	}
+	return reg, true, nil
 }
 
 func (s *attendeeService) ListMyRegisteredEvents(ctx context.Context, userID string) ([]*domain.EventRegistrationWithEvent, error) {

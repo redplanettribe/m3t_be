@@ -45,6 +45,16 @@ func (f *fakeEventRepo) GetByID(ctx context.Context, id string) (*domain.Event, 
 	return nil, domain.ErrNotFound
 }
 
+func (f *fakeEventRepo) GetByEventCode(ctx context.Context, eventCode string) (*domain.Event, error) {
+	code := strings.ToLower(strings.TrimSpace(eventCode))
+	for _, e := range f.byID {
+		if strings.ToLower(e.EventCode) == code {
+			return e, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 func (f *fakeEventRepo) ListByOwnerID(ctx context.Context, ownerID string) ([]*domain.Event, error) {
 	var out []*domain.Event
 	for _, e := range f.byID {

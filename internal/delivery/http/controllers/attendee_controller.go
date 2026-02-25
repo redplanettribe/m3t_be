@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"multitrackticketing/internal/delivery/http/helpers"
 	"multitrackticketing/internal/delivery/http/middleware"
@@ -26,14 +27,21 @@ func NewAttendeeController(logger *slog.Logger, svc domain.AttendeeService) *Att
 	}
 }
 
+// RegisterForEventSuccessResponse is the success response envelope for POST /attendee/events/{eventID}/registrations and POST /attendee/registrations (200 or 201).
+type RegisterForEventSuccessResponse struct {
+	Data  *domain.EventRegistration `json:"data"`
+	Error *helpers.APIError          `json:"error"`
+}
+
 // RegisterForEvent godoc
 // @Summary Register the current attendee for an event
-// @Description Registers the authenticated user as an attendee for the specified event. Idempotent if already registered.
+// @Description Registers the authenticated user as an attendee for the specified event. Idempotent: returns 201 when a new registration is created, 200 when already registered.
 // @Tags attendee
 // @Produce json
 // @Security BearerAuth
 // @Param eventID path string true "Event ID (UUID)"
-// @Success 201 {object} helpers.APIResponse "data contains the event registration"
+// @Success 200 {object} controllers.RegisterForEventSuccessResponse "Already registered"
+// @Success 201 {object} controllers.RegisterForEventSuccessResponse "New registration created"
 // @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
 // @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
 // @Failure 404 {object} helpers.APIResponse "error.code: not_found"
@@ -56,7 +64,7 @@ func (c *AttendeeController) RegisterForEvent(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	reg, err := c.Service.RegisterForEvent(r.Context(), eventID, userID)
+	reg, created, err := c.Service.RegisterForEvent(r.Context(), eventID, userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
@@ -70,8 +78,83 @@ func (c *AttendeeController) RegisterForEvent(w http.ResponseWriter, r *http.Req
 		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
 		return
 	}
+	if created {
+		helpers.WriteJSONSuccess(w, http.StatusCreated, reg)
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, reg)
+}
 
-	helpers.WriteJSONSuccess(w, http.StatusCreated, reg)
+// RegisterForEventByCodeRequest is the request body for POST /attendee/registrations.
+type RegisterForEventByCodeRequest struct {
+	EventCode string `json:"event_code"`
+}
+
+// Validate implements helpers.Validator.
+func (r *RegisterForEventByCodeRequest) Validate() []string {
+	code := strings.ToLower(strings.TrimSpace(r.EventCode))
+	if code == "" {
+		return []string{"event_code is required"}
+	}
+	if len(code) != 4 {
+		return []string{"event_code must be exactly 4 characters"}
+	}
+	for _, c := range code {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			continue
+		}
+		return []string{"event_code must contain only lowercase letters and digits"}
+	}
+	r.EventCode = code
+	return nil
+}
+
+// RegisterForEventByCode godoc
+// @Summary Register for an event by event code
+// @Description Registers the authenticated user as an attendee for the event with the given event_code. Idempotent: returns 201 when a new registration is created, 200 when already registered.
+// @Tags attendee
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body controllers.RegisterForEventByCodeRequest true "Event code (4 characters)"
+// @Success 200 {object} controllers.RegisterForEventSuccessResponse "Already registered"
+// @Success 201 {object} controllers.RegisterForEventSuccessResponse "New registration created"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /attendee/registrations [post]
+func (c *AttendeeController) RegisterForEventByCode(w http.ResponseWriter, r *http.Request) {
+	var req RegisterForEventByCodeRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	reg, created, err := c.Service.RegisterForEventByCode(r.Context(), req.EventCode, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if created {
+		helpers.WriteJSONSuccess(w, http.StatusCreated, reg)
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, reg)
 }
 
 // ListMyRegisteredEventsItem is an item in the response for GET /attendee/events.

@@ -38,6 +38,7 @@ func NewEvent(name, eventCode, ownerID string, createdAt, updatedAt time.Time) *
 type EventRepository interface {
 	Create(ctx context.Context, event *Event) error
 	GetByID(ctx context.Context, id string) (*Event, error)
+	GetByEventCode(ctx context.Context, eventCode string) (*Event, error)
 	ListByOwnerID(ctx context.Context, ownerID string) ([]*Event, error)
 	Delete(ctx context.Context, id string) error
 }

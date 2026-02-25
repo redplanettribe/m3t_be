@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"multitrackticketing/internal/domain"
 )
@@ -35,6 +36,24 @@ func (r *eventRepository) GetByID(ctx context.Context, id string) (*domain.Event
 	`
 	e := &domain.Event{}
 	err := r.DB.QueryRowContext(ctx, query, id).Scan(&e.ID, &e.Name, &e.EventCode, &e.OwnerID, &e.CreatedAt, &e.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return e, nil
+}
+
+func (r *eventRepository) GetByEventCode(ctx context.Context, eventCode string) (*domain.Event, error) {
+	code := strings.ToLower(strings.TrimSpace(eventCode))
+	query := `
+		SELECT id, name, event_code, owner_id, created_at, updated_at
+		FROM events
+		WHERE event_code = $1
+	`
+	e := &domain.Event{}
+	err := r.DB.QueryRowContext(ctx, query, code).Scan(&e.ID, &e.Name, &e.EventCode, &e.OwnerID, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound

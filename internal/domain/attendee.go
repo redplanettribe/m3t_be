@@ -40,7 +40,10 @@ type EventRegistrationWithEvent struct {
 
 // AttendeeService defines attendee-facing operations such as event registration.
 type AttendeeService interface {
-	RegisterForEvent(ctx context.Context, eventID, userID string) (*EventRegistration, error)
+	// RegisterForEvent registers the user for the event. Returns (reg, created, err): created is true if a new registration was created, false if already registered.
+	RegisterForEvent(ctx context.Context, eventID, userID string) (*EventRegistration, bool, error)
+	// RegisterForEventByCode registers the user for the event identified by event_code. Returns (reg, created, err): created is true if a new registration was created, false if already registered.
+	RegisterForEventByCode(ctx context.Context, eventCode, userID string) (*EventRegistration, bool, error)
 	ListMyRegisteredEvents(ctx context.Context, userID string) ([]*EventRegistrationWithEvent, error)
 }
 
