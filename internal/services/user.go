@@ -102,7 +102,7 @@ func (s *userService) VerifyLoginCode(ctx context.Context, email, code string) (
 			return "", nil, fmt.Errorf("failed to get role %q: %w", defaultRole, err)
 		}
 		now := time.Now()
-		user = domain.NewUser(email, "", "", "", "", now, now)
+		user = domain.NewUser(email, "", "", now, now)
 		if err := s.userRepo.Create(ctx, user); err != nil {
 			return "", nil, fmt.Errorf("failed to create user: %w", err)
 		}

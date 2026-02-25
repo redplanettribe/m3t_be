@@ -19,29 +19,27 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 
 func (r *userRepository) Create(ctx context.Context, u *domain.User) error {
 	query := `
-		INSERT INTO users (email, password_hash, salt, name, last_name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (email, name, last_name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
-	passwordHash := sql.NullString{String: u.PasswordHash, Valid: u.PasswordHash != ""}
-	salt := sql.NullString{String: u.Salt, Valid: u.Salt != ""}
-	return r.DB.QueryRowContext(ctx, query, u.Email, passwordHash, salt, u.Name, u.LastName, u.CreatedAt, u.UpdatedAt).Scan(&u.ID)
+	name := sql.NullString{String: u.Name, Valid: u.Name != ""}
+	lastName := sql.NullString{String: u.LastName, Valid: u.LastName != ""}
+	return r.DB.QueryRowContext(ctx, query, u.Email, name, lastName, u.CreatedAt, u.UpdatedAt).Scan(&u.ID)
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, salt, name, last_name, created_at, updated_at
+		SELECT id, email, name, last_name, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 	u := &domain.User{}
-	var name, lastName, passwordHash, salt sql.NullString
-	err := r.DB.QueryRowContext(ctx, query, email).Scan(&u.ID, &u.Email, &passwordHash, &salt, &name, &lastName, &u.CreatedAt, &u.UpdatedAt)
+	var name, lastName sql.NullString
+	err := r.DB.QueryRowContext(ctx, query, email).Scan(&u.ID, &u.Email, &name, &lastName, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	u.PasswordHash = passwordHash.String
-	u.Salt = salt.String
 	u.Name = name.String
 	u.LastName = lastName.String
 	return u, nil
@@ -49,18 +47,16 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.
 
 func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, salt, name, last_name, created_at, updated_at
+		SELECT id, email, name, last_name, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	u := &domain.User{}
-	var name, lastName, passwordHash, salt sql.NullString
-	err := r.DB.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Email, &passwordHash, &salt, &name, &lastName, &u.CreatedAt, &u.UpdatedAt)
+	var name, lastName sql.NullString
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Email, &name, &lastName, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	u.PasswordHash = passwordHash.String
-	u.Salt = salt.String
 	u.Name = name.String
 	u.LastName = lastName.String
 	return u, nil

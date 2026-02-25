@@ -1,1 +1,0 @@
-ALTER TABLE rooms ADD COLUMN not_bookable BOOLEAN NOT NULL DEFAULT false;

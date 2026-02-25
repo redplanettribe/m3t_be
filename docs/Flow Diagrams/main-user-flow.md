@@ -23,8 +23,8 @@ flowchart TB
     subgraph System
         direction TB
         S1[Validates QR code]
-        S2[Authenticates user via check-in database]
-        S3[Gives user an identifier]
+        S2[Authenticates user via passwordless email login<br/>(one-time code + email)]
+        S3[Issues JWT and internal user identifier]
         S4[Returns event data]
         S5[Fetches real-time session data]
         S6[Calculates available spots per session]

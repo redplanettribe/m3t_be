@@ -15,26 +15,22 @@ var (
 // User represents a registered user
 // swagger:model User
 type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	Salt         string    `json:"-"` // per-user salt used when hashing password
-	Name         string    `json:"name"`
-	LastName     string    `json:"last_name"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	LastName  string    `json:"last_name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // NewUser returns a new User with the given fields. ID is typically set by the repository on create.
-func NewUser(email, passwordHash, salt, name, lastName string, createdAt, updatedAt time.Time) *User {
+func NewUser(email, name, lastName string, createdAt, updatedAt time.Time) *User {
 	return &User{
-		Email:        email,
-		PasswordHash: passwordHash,
-		Salt:         salt,
-		Name:         name,
-		LastName:     lastName,
-		CreatedAt:    createdAt,
-		UpdatedAt:    updatedAt,
+		Email:     email,
+		Name:      name,
+		LastName:  lastName,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}
 }
 

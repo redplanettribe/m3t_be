@@ -1,6 +1,6 @@
 ---
 name: add-email
-description: Add a new email type or change the email implementation. Use when adding a new transactional email (e.g. password reset), new template, or when modifying how email is sent or rendered.
+description: Add a new email type or change the email implementation. Use when adding a new transactional email (e.g. login code, welcome), new template, or when modifying how email is sent or rendered.
 ---
 
 # Add Email
@@ -9,7 +9,7 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, [email.mdc](.curso
 
 ## When to use
 
-- Adding a new transactional email (e.g. welcome, password reset, notification)
+- Adding a new transactional email (e.g. login code, welcome, notification)
 - Adding or editing email templates
 - Changing how the mailer or template renderer works
 
@@ -19,20 +19,21 @@ Follow project rules in `.cursor/rules/` (Clean Architecture, [email.mdc](.curso
 - **Adapter** (`internal/adapters/email/`): Implements Mailer (SES/noop) and EmailTemplateRenderer (embedded templates from `templates/`).
 - **Service** (`internal/services/email.go`): Implements `EmailService`; uses renderer then mailer. No inline HTML/text—always use templates.
 
-## Adding a new email type (e.g. password reset)
+## Adding a new email type (e.g. login code)
 
-1. **Domain**: In `internal/domain/email.go`, add a DTO struct for the email data (e.g. `PasswordResetEmailData` with `Email`, `ResetToken`, `ResetURL`). Add the method to `EmailService` (e.g. `SendPasswordResetEmail(ctx context.Context, data *PasswordResetEmailData) error`).
+1. **Domain**: In `internal/domain/email.go`, add a DTO struct for the email data (e.g. `LoginCodeEmailData` with `Email`, `Code`, `ExpiresInMinutes`). Add the method to `EmailService` (e.g. `SendLoginCode(ctx context.Context, data *LoginCodeEmailData) error`).
 
-2. **Templates**: Under `internal/adapters/email/templates/`, add three files for template name `password_reset`:
-   - `password_reset_subject.txt` (e.g. `Password reset request`)
-   - `password_reset.html` (HTML body; use `{{.ResetURL}}`, `{{.Email}}`, etc.)
-   - `password_reset.txt` (plain text body, same variables)
+2. **Templates**: Under `internal/adapters/email/templates/`, add three files for template name `login_code`:
+   - `login_code_subject.txt` (e.g. `Your login code`)
+   - `login_code.html` (HTML body; use `{{.Code}}`, `{{.ExpiresInMinutes}}`, `{{.Email}}` if needed, etc. The existing template looks like:
+     `<p>Use this code to sign in:</p><p><strong>{{.Code}}</strong></p><p>It expires in {{.ExpiresInMinutes}} minutes. If you didn't request this, you can ignore this email.</p>`)
+   - `login_code.txt` (plain text body, same variables)
 
    Use Go template syntax: `{{.FieldName}}`, `{{if .X}}...{{else}}...{{end}}`. Field names must match exported fields on the DTO.
 
-3. **Service**: In `internal/services/email.go`, implement the new method: validate/normalize data, call `s.renderer.Render("password_reset", data)`, then `s.mailer.Send(data.Email, subject, htmlBody, textBody)`. Wrap errors with `fmt.Errorf(..., %w, err)`.
+3. **Service**: In `internal/services/email.go`, implement the new method: validate/normalize data, call `s.renderer.Render("login_code", data)`, then `s.mailer.Send(data.Email, subject, htmlBody, textBody)`. Wrap errors with `fmt.Errorf(..., %w, err)`.
 
-4. **Call site**: From the place that triggers the email (e.g. auth service), call `emailService.SendPasswordResetEmail(ctx, &domain.PasswordResetEmailData{...})`. No change in `cmd/api/main.go` unless you introduce a new adapter or config.
+4. **Call site**: From the place that triggers the email (e.g. auth service), call `emailService.SendLoginCode(ctx, &domain.LoginCodeEmailData{...})`. No change in `cmd/api/main.go` unless you introduce a new adapter or config.
 
 ## Editing existing templates
 

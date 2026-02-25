@@ -59,8 +59,6 @@ Table session_tags {
 Table users {
   id uuid [pk, default: `gen_random_uuid()`]
   email varchar(255) [not null, unique]
-  password_hash text
-  salt text
   name varchar(255)
   last_name varchar(255)
   created_at timestamptz [default: `now()`]

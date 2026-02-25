@@ -7,7 +7,7 @@ Admin vs System actions.
 flowchart TB
     subgraph Admin
         direction TB
-        A1[Accesses admin portal<br/>authentication required]
+        A1[Accesses admin portal<br/>passwordless email login required]
         A2[Navigates to dashboard]
         A3[Clicks Create New Event]
         A4[Introduces Sessionize key]
