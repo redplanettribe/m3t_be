@@ -626,6 +626,70 @@ func TestSessionRepository_DeleteRoom(t *testing.T) {
 	}
 }
 
+func TestSessionRepository_DeleteSession(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		sessionID    string
+		mock         func(mock sqlmock.Sqlmock)
+		wantErr      bool
+		wantNotFound bool
+	}{
+		{
+			name:      "success",
+			sessionID: "sess-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM sessions WHERE id`).
+					WithArgs("sess-1").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "not found",
+			sessionID: "sess-missing",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM sessions WHERE id`).
+					WithArgs("sess-missing").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name:      "db error",
+			sessionID: "sess-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM sessions WHERE id`).
+					WithArgs("sess-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			err = repo.DeleteSession(ctx, tt.sessionID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)

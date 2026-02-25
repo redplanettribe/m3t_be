@@ -131,6 +131,9 @@ func (m *mockSessionRepository) UpdateRoomDetails(ctx context.Context, roomID st
 	return nil, nil
 }
 func (m *mockSessionRepository) DeleteRoom(ctx context.Context, roomID string) error { return nil }
+func (m *mockSessionRepository) DeleteSession(ctx context.Context, sessionID string) error {
+	return nil
+}
 
 func (m *mockSessionRepository) GetSessionByID(ctx context.Context, sessionID string) (*domain.Session, error) {
 	return nil, domain.ErrNotFound

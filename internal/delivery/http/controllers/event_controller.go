@@ -982,6 +982,49 @@ func (c *ScheduleController) UpdateSessionSchedule(w http.ResponseWriter, r *htt
 	helpers.WriteJSONSuccess(w, http.StatusOK, session)
 }
 
+// DeleteEventSession godoc
+// @Summary Delete a session
+// @Description Deletes a session. Only the event owner can delete. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Success 200 {object} controllers.DeleteRoomSuccessResponse "data contains status"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID} [delete]
+func (c *ScheduleController) DeleteEventSession(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	if eventID == "" || sessionID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	if err := c.Service.DeleteEventSession(r.Context(), eventID, sessionID, ownerID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or session not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, DeleteEventResponse{Status: "deleted"})
+}
+
 // SendEventInvitations godoc
 // @Summary Send event invitation emails
 // @Description Send invitation emails to register for the event. Body contains a string of emails separated by commas or spaces. Only the event owner can invite. Each invitation is persisted and emailed; duplicates for the same event are skipped. Returns count of sent and list of failed addresses.

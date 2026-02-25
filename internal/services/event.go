@@ -493,6 +493,46 @@ func (s *eventService) DeleteEventRoom(ctx context.Context, eventID, roomID, own
 	return nil
 }
 
+func (s *eventService) DeleteEventSession(ctx context.Context, eventID, sessionID, ownerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get session: %w", err)
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	if err := s.sessionRepo.DeleteSession(ctx, sessionID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}
+
 func (s *eventService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()

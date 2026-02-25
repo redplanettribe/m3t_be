@@ -91,6 +91,11 @@ type fakeEventService struct {
 	lastDeleteEventRoomEventID string
 	lastDeleteEventRoomRoomID  string
 	lastDeleteEventRoomOwnerID string
+	// DeleteEventSession
+	deleteEventSessionErr           error
+	lastDeleteEventSessionEventID   string
+	lastDeleteEventSessionSessionID string
+	lastDeleteEventSessionOwnerID   string
 	// UpdateEvent
 	updateEventErr          error
 	updateEventResult       *domain.Event
@@ -196,6 +201,13 @@ func (f *fakeEventService) DeleteEventRoom(ctx context.Context, eventID, roomID,
 	f.lastDeleteEventRoomRoomID = roomID
 	f.lastDeleteEventRoomOwnerID = ownerID
 	return f.deleteEventRoomErr
+}
+
+func (f *fakeEventService) DeleteEventSession(ctx context.Context, eventID, sessionID, ownerID string) error {
+	f.lastDeleteEventSessionEventID = eventID
+	f.lastDeleteEventSessionSessionID = sessionID
+	f.lastDeleteEventSessionOwnerID = ownerID
+	return f.deleteEventSessionErr
 }
 
 func (f *fakeEventService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
@@ -1121,6 +1133,110 @@ func TestScheduleController_DeleteEventRoom(t *testing.T) {
 			}
 			rr := httptest.NewRecorder()
 			ctrl.DeleteEventRoom(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				require.Nil(t, envelope.Error)
+				tt.checkCall(t, fake)
+				var data DeleteEventResponse
+				dataBytes, _ := json.Marshal(envelope.Data)
+				require.NoError(t, json.Unmarshal(dataBytes, &data))
+				assert.Equal(t, "deleted", data.Status)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_DeleteEventSession(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		sessionID      string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			sessionID:  "sess-1",
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastDeleteEventSessionEventID)
+				assert.Equal(t, "sess-1", fake.lastDeleteEventSessionSessionID)
+				assert.Equal(t, "user-123", fake.lastDeleteEventSessionOwnerID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			sessionID:      "sess-1",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or sessionID",
+		},
+		{
+			name:           "missing sessionID",
+			eventID:        "ev-1",
+			sessionID:      "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or sessionID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			sessionID:      "sess-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event or session not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "service error",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{deleteEventSessionErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/sessions/" + tt.sessionID
+			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if tt.sessionID != "" {
+				req.SetPathValue("sessionID", tt.sessionID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.DeleteEventSession(rr, req)
 			require.Equal(t, tt.wantStatus, rr.Code)
 			var envelope helpers.APIResponse
 			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))

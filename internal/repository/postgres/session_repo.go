@@ -147,6 +147,18 @@ func (r *SessionRepository) DeleteRoom(ctx context.Context, roomID string) error
 	return nil
 }
 
+func (r *SessionRepository) DeleteSession(ctx context.Context, sessionID string) error {
+	result, err := r.DB.ExecContext(ctx, `DELETE FROM sessions WHERE id = $1`, sessionID)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string) (*domain.Session, error) {
 	query := `
 		SELECT id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at

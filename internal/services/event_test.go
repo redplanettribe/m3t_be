@@ -228,6 +228,16 @@ func (f *fakeSessionRepo) DeleteRoom(ctx context.Context, roomID string) error {
 	return domain.ErrNotFound
 }
 
+func (f *fakeSessionRepo) DeleteSession(ctx context.Context, sessionID string) error {
+	for i, s := range f.sessions {
+		if s.ID == sessionID {
+			f.sessions = append(f.sessions[:i], f.sessions[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
 func (f *fakeSessionRepo) ListSessionsByEventID(ctx context.Context, eventID string) ([]*domain.Session, error) {
 	roomIDs := make(map[string]bool)
 	for _, r := range f.rooms {
@@ -1540,6 +1550,121 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 				sr := sessionRepo.(*fakeSessionRepo)
 				_, err := sr.GetRoomByID(ctx, tt.roomID)
 				require.True(t, errors.Is(err, domain.ErrNotFound), "room should be deleted")
+			}
+		})
+	}
+}
+
+func TestEventService_DeleteEventSession(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
+		eventID       string
+		sessionID     string
+		ownerID       string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		assertDeleted bool
+	}{
+		{
+			name: "success owner deletes session",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk", StartTime: time.Now(), EndTime: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			sessionID:     "sess-1",
+			ownerID:       "user-1",
+			assertDeleted: true,
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-missing",
+			sessionID:    "sess-1",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk", StartTime: time.Now(), EndTime: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			sessionID:     "sess-1",
+			ownerID:       "user-2",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name: "session not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-1",
+			sessionID:    "sess-missing",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "session in different event",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-other", Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk", StartTime: time.Now(), EndTime: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-1",
+			sessionID:    "sess-1",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			err := svc.DeleteEventSession(ctx, tt.eventID, tt.sessionID, tt.ownerID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.assertDeleted {
+				sr := sessionRepo.(*fakeSessionRepo)
+				_, err := sr.GetSessionByID(ctx, tt.sessionID)
+				require.True(t, errors.Is(err, domain.ErrNotFound), "session should be deleted")
 			}
 		})
 	}
