@@ -15,4 +15,6 @@ type TagRepository interface {
 	EnsureTagForEvent(ctx context.Context, eventID, tagName string) (tagID string, err error)
 	// SetSessionTags replaces all tag links for the given session with the given tag IDs.
 	SetSessionTags(ctx context.Context, sessionID string, tagIDs []string) error
+	// ListTagsByEventID returns all tags associated with the given event via event_tags.
+	ListTagsByEventID(ctx context.Context, eventID string) ([]*Tag, error)
 }

@@ -135,10 +135,10 @@ func (c *ScheduleController) GetEventByID(w http.ResponseWriter, r *http.Request
 
 // UpdateEventRequest is the request body for PATCH /events/{eventID}. All fields optional; omitted fields are unchanged.
 type UpdateEventRequest struct {
-	Date         *time.Time `json:"date"`
-	Description  *string    `json:"description"`
-	LocationLat  *float64   `json:"location_lat"`
-	LocationLng  *float64   `json:"location_lng"`
+	Date        *time.Time `json:"date"`
+	Description *string    `json:"description"`
+	LocationLat *float64   `json:"location_lat"`
+	LocationLng *float64   `json:"location_lng"`
 }
 
 // Validate implements Validator. Optional bounds for lat (-90..90) and lng (-180..180).
@@ -311,6 +311,27 @@ type ToggleRoomNotBookableSuccessResponse struct {
 	Error *helpers.APIError `json:"error"`
 }
 
+// CreateRoomRequest is the request body for POST /events/{eventID}/rooms.
+type CreateRoomRequest struct {
+	Name          string `json:"name"`
+	Capacity      int    `json:"capacity"`
+	Description   string `json:"description"`
+	HowToGetThere string `json:"how_to_get_there"`
+	NotBookable   bool   `json:"not_bookable"`
+}
+
+// Validate implements Validator.
+func (c CreateRoomRequest) Validate() []string {
+	var errs []string
+	if strings.TrimSpace(c.Name) == "" {
+		errs = append(errs, "name is required")
+	}
+	if c.Capacity < 0 {
+		errs = append(errs, "capacity must be non-negative")
+	}
+	return errs
+}
+
 // ToggleRoomNotBookable godoc
 // @Summary Toggle room not_bookable flag
 // @Description Toggles the not_bookable flag for a room. Only the event owner can toggle. Requires authentication.
@@ -354,12 +375,64 @@ func (c *ScheduleController) ToggleRoomNotBookable(w http.ResponseWriter, r *htt
 	helpers.WriteJSONSuccess(w, http.StatusOK, room)
 }
 
+// CreateEventRoom godoc
+// @Summary Create a room
+// @Description Creates a new room for the event. Only the event owner can create. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body CreateRoomRequest true "Room data"
+// @Success 201 {object} controllers.CreateRoomSuccessResponse "data contains the created room"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/rooms [post]
+func (c *ScheduleController) CreateEventRoom(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+
+	var req CreateRoomRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	room, err := c.Service.CreateEventRoom(r.Context(), eventID, ownerID, req.Name, req.Capacity, req.Description, req.HowToGetThere, req.NotBookable)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+
+	helpers.WriteJSONSuccess(w, http.StatusCreated, room)
+}
+
 // UpdateRoomRequest is the request body for PATCH /events/{eventID}/rooms/{roomID}.
 type UpdateRoomRequest struct {
-	Capacity      int     `json:"capacity"`
-	Description   string  `json:"description"`
-	HowToGetThere string  `json:"how_to_get_there"`
-	NotBookable   *bool   `json:"not_bookable"`
+	Capacity      int    `json:"capacity"`
+	Description   string `json:"description"`
+	HowToGetThere string `json:"how_to_get_there"`
+	NotBookable   *bool  `json:"not_bookable"`
 }
 
 // Validate implements Validator.
@@ -379,7 +452,7 @@ type GetRoomSuccessResponse struct {
 
 // ListRoomsSuccessResponse is the success response envelope for GET /events/{eventID}/rooms (200).
 type ListRoomsSuccessResponse struct {
-	Data  []*domain.Room   `json:"data"`
+	Data  []*domain.Room    `json:"data"`
 	Error *helpers.APIError `json:"error"`
 }
 
@@ -393,6 +466,12 @@ type UpdateRoomSuccessResponse struct {
 type DeleteRoomSuccessResponse struct {
 	Data  DeleteEventResponse `json:"data"`
 	Error *helpers.APIError   `json:"error"`
+}
+
+// CreateRoomSuccessResponse is the success response envelope for POST /events/{eventID}/rooms (201).
+type CreateRoomSuccessResponse struct {
+	Data  *domain.Room      `json:"data"`
+	Error *helpers.APIError `json:"error"`
 }
 
 // CreateSpeakerRequest is the request body for POST /events/{eventID}/speakers.
@@ -423,8 +502,8 @@ type GetEventSpeakerResponse struct {
 
 // ListSpeakersSuccessResponse is the success response envelope for GET /events/{eventID}/speakers (200).
 type ListSpeakersSuccessResponse struct {
-	Data  []*domain.Speaker   `json:"data"`
-	Error *helpers.APIError   `json:"error"`
+	Data  []*domain.Speaker `json:"data"`
+	Error *helpers.APIError `json:"error"`
 }
 
 // GetEventSpeakerSuccessResponse is the success response envelope for GET /events/{eventID}/speakers/{speakerID} (200).
@@ -435,8 +514,8 @@ type GetEventSpeakerSuccessResponse struct {
 
 // CreateSpeakerSuccessResponse is the success response envelope for POST /events/{eventID}/speakers (201).
 type CreateSpeakerSuccessResponse struct {
-	Data  *domain.Speaker    `json:"data"`
-	Error *helpers.APIError  `json:"error"`
+	Data  *domain.Speaker   `json:"data"`
+	Error *helpers.APIError `json:"error"`
 }
 
 // ListEventRooms godoc
@@ -1118,7 +1197,7 @@ func parseEmailsFromString(raw string) []string {
 
 // SendEventInvitationsResponse is the data payload for POST /events/{eventID}/invitations (200).
 type SendEventInvitationsResponse struct {
-	Sent  int      `json:"sent"`
+	Sent   int      `json:"sent"`
 	Failed []string `json:"failed"`
 }
 
@@ -1126,6 +1205,44 @@ type SendEventInvitationsResponse struct {
 type SendEventInvitationsSuccessResponse struct {
 	Data  SendEventInvitationsResponse `json:"data"`
 	Error *helpers.APIError            `json:"error"`
+}
+
+// CreateSessionRequest is the request body for POST /events/{eventID}/sessions.
+type CreateSessionRequest struct {
+	RoomID      string    `json:"room_id"`
+	Title       string    `json:"title"`
+	StartTime   time.Time `json:"start_time"`
+	EndTime     time.Time `json:"end_time"`
+	Description string    `json:"description"`
+	Tags        []string  `json:"tags"`
+	SpeakerIDs  []string  `json:"speaker_ids"`
+}
+
+// Validate implements Validator.
+func (c CreateSessionRequest) Validate() []string {
+	var errs []string
+	if strings.TrimSpace(c.RoomID) == "" {
+		errs = append(errs, "room_id is required")
+	}
+	if strings.TrimSpace(c.Title) == "" {
+		errs = append(errs, "title is required")
+	}
+	if c.StartTime.IsZero() {
+		errs = append(errs, "start_time is required")
+	}
+	if c.EndTime.IsZero() {
+		errs = append(errs, "end_time is required")
+	}
+	if !c.StartTime.IsZero() && !c.EndTime.IsZero() && !c.EndTime.After(c.StartTime) {
+		errs = append(errs, "end_time must be after start_time")
+	}
+	return errs
+}
+
+// CreateSessionSuccessResponse is the success response envelope for POST /events/{eventID}/sessions (201).
+type CreateSessionSuccessResponse struct {
+	Data  *domain.Session   `json:"data"`
+	Error *helpers.APIError `json:"error"`
 }
 
 // UpdateSessionScheduleRequest is the request body for PATCH /events/{eventID}/sessions/{sessionID}.
@@ -1379,4 +1496,111 @@ func (c *ScheduleController) SendEventInvitations(w http.ResponseWriter, r *http
 		return
 	}
 	helpers.WriteJSONSuccess(w, http.StatusOK, SendEventInvitationsResponse{Sent: sent, Failed: failed})
+}
+
+// ListEventTagsSuccessResponse is the success response envelope for GET /events/{eventID}/tags (200).
+type ListEventTagsSuccessResponse struct {
+	Data  []*domain.Tag     `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// ListEventTags godoc
+// @Summary List tags for an event
+// @Description Returns the list of tags associated with the event. Only the event owner can list. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} controllers.ListEventTagsSuccessResponse "data is an array of tags"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/tags [get]
+func (c *ScheduleController) ListEventTags(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	callerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	tags, err := c.Service.ListEventTags(r.Context(), eventID, callerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if tags == nil {
+		tags = []*domain.Tag{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, tags)
+}
+
+// CreateEventSession godoc
+// @Summary Create a session
+// @Description Creates a new session for the event in a given room and time slot, with optional tags and speakers. Only the event owner can create. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body CreateSessionRequest true "Session data"
+// @Success 201 {object} controllers.CreateSessionSuccessResponse "data contains the created session"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions [post]
+func (c *ScheduleController) CreateEventSession(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+
+	var req CreateSessionRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+
+	session, err := c.Service.CreateEventSession(r.Context(), eventID, ownerID, req.RoomID, req.Title, req.Description, req.StartTime, req.EndTime, req.Tags, req.SpeakerIDs)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event, room, or speaker not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+
+	helpers.WriteJSONSuccess(w, http.StatusCreated, session)
 }

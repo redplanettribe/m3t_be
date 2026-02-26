@@ -24,6 +24,54 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.CreateRoomRequest:
+    properties:
+      capacity:
+        type: integer
+      description:
+        type: string
+      how_to_get_there:
+        type: string
+      name:
+        type: string
+      not_bookable:
+        type: boolean
+    type: object
+  controllers.CreateRoomSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Room'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.CreateSessionRequest:
+    properties:
+      description:
+        type: string
+      end_time:
+        type: string
+      room_id:
+        type: string
+      speaker_ids:
+        items:
+          type: string
+        type: array
+      start_time:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+    type: object
+  controllers.CreateSessionSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Session'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.CreateSpeakerRequest:
     properties:
       bio:
@@ -149,6 +197,15 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/controllers.ListEventInvitationsResponse'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.ListEventTagsSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/domain.Tag'
+        type: array
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
@@ -451,6 +508,8 @@ definitions:
         type: string
       not_bookable:
         type: boolean
+      source:
+        type: string
       source_session_id:
         type: integer
       updated_at:
@@ -476,6 +535,8 @@ definitions:
       id:
         type: string
       room_id:
+        type: string
+      source:
         type: string
       source_session_id:
         type: string
@@ -514,11 +575,20 @@ definitions:
         type: string
       profile_picture:
         type: string
-      sessionize_speaker_id:
+      source:
+        type: string
+      source_session_id:
         type: string
       tag_line:
         type: string
       updated_at:
+        type: string
+    type: object
+  domain.Tag:
+    properties:
+      id:
+        type: string
+      name:
         type: string
     type: object
   domain.User:
@@ -1133,6 +1203,55 @@ paths:
       summary: List rooms for an event
       tags:
       - events
+    post:
+      consumes:
+      - application/json
+      description: Creates a new room for the event. Only the event owner can create.
+        Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Room data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.CreateRoomRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: data contains the created room
+          schema:
+            $ref: '#/definitions/controllers.CreateRoomSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a room
+      tags:
+      - events
   /events/{eventID}/rooms/{roomID}:
     delete:
       description: Deletes a room and its sessions. Only the event owner can delete.
@@ -1323,6 +1442,57 @@ paths:
       security:
       - BearerAuth: []
       summary: Toggle room not_bookable flag
+      tags:
+      - events
+  /events/{eventID}/sessions:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new session for the event in a given room and time slot,
+        with optional tags and speakers. Only the event owner can create. Requires
+        authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Session data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.CreateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: data contains the created session
+          schema:
+            $ref: '#/definitions/controllers.CreateSessionSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a session
       tags:
       - events
   /events/{eventID}/sessions/{sessionID}:
@@ -1661,6 +1831,48 @@ paths:
       security:
       - BearerAuth: []
       summary: Get a speaker by ID
+      tags:
+      - events
+  /events/{eventID}/tags:
+    get:
+      description: Returns the list of tags associated with the event. Only the event
+        owner can list. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data is an array of tags
+          schema:
+            $ref: '#/definitions/controllers.ListEventTagsSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List tags for an event
       tags:
       - events
   /events/{eventID}/team-members:

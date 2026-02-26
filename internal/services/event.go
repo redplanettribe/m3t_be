@@ -286,6 +286,112 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	return nil
 }
 
+func generateManualSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "manual-" + hex.EncodeToString(b), nil
+}
+
+func (s *eventService) CreateEventSession(
+	ctx context.Context,
+	eventID, ownerID, roomID, title, description string,
+	startTime, endTime time.Time,
+	tagNames, speakerIDs []string,
+) (*domain.Session, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+
+	room, err := s.sessionRepo.GetRoomByID(ctx, roomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+
+	if !endTime.After(startTime) {
+		return nil, fmt.Errorf("end_time must be after start_time: %w", domain.ErrInvalidInput)
+	}
+
+	sourceSessionID, err := generateManualSessionID()
+	if err != nil {
+		return nil, fmt.Errorf("generate manual session id: %w", err)
+	}
+
+	now := time.Now()
+	sess := domain.NewSession(roomID, sourceSessionID, "admin_app", title, description, startTime, endTime, nil, now, now)
+	if err := s.sessionRepo.CreateSession(ctx, sess); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	var tagIDs []string
+	for _, tagName := range tagNames {
+		name := strings.TrimSpace(tagName)
+		if name == "" {
+			continue
+		}
+		tagID, err := s.tagRepo.EnsureTagForEvent(ctx, eventID, name)
+		if err != nil {
+			return nil, fmt.Errorf("ensure tag %q for event: %w", name, err)
+		}
+		tagIDs = append(tagIDs, tagID)
+	}
+	if len(tagIDs) > 0 {
+		if err := s.tagRepo.SetSessionTags(ctx, sess.ID, tagIDs); err != nil {
+			return nil, fmt.Errorf("set session tags: %w", err)
+		}
+	}
+
+	for _, speakerID := range speakerIDs {
+		id := strings.TrimSpace(speakerID)
+		if id == "" {
+			continue
+		}
+		sp, err := s.sessionRepo.GetSpeakerByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, domain.ErrNotFound
+			}
+			return nil, fmt.Errorf("get speaker: %w", err)
+		}
+		if sp.EventID != eventID {
+			return nil, fmt.Errorf("speaker does not belong to event: %w", domain.ErrInvalidInput)
+		}
+		if err := s.sessionRepo.CreateSessionSpeaker(ctx, sess.ID, id); err != nil {
+			return nil, fmt.Errorf("link session to speaker: %w", err)
+		}
+	}
+
+	created, err := s.sessionRepo.GetSessionByID(ctx, sess.ID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get session: %w", err)
+	}
+
+	return created, nil
+}
+
 func (s *eventService) UpdateSessionSchedule(ctx context.Context, eventID, sessionID, ownerID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
@@ -446,6 +552,32 @@ func (s *eventService) DeleteEvent(ctx context.Context, eventID string, ownerID 
 		return fmt.Errorf("delete event: %w", err)
 	}
 	return nil
+}
+
+func (s *eventService) CreateEventRoom(ctx context.Context, eventID, ownerID, name string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+
+	now := time.Now()
+	room := domain.NewRoom(eventID, name, 0, "admin_app", notBookable, capacity, description, howToGetThere, now, now)
+	if err := s.sessionRepo.CreateRoom(ctx, room); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("create room: %w", err)
+	}
+	return room, nil
 }
 
 func (s *eventService) ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*domain.Room, error) {
@@ -900,6 +1032,30 @@ func (s *eventService) RemoveEventTeamMember(ctx context.Context, eventID, userI
 		return fmt.Errorf("remove team member: %w", err)
 	}
 	return nil
+}
+
+func (s *eventService) ListEventTags(ctx context.Context, eventID, callerID string) ([]*domain.Tag, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != callerID {
+		return nil, domain.ErrForbidden
+	}
+	tags, err := s.tagRepo.ListTagsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list event tags: %w", err)
+	}
+	if tags == nil {
+		tags = []*domain.Tag{}
+	}
+	return tags, nil
 }
 
 func (s *eventService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {

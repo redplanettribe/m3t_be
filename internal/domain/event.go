@@ -15,16 +15,16 @@ var ErrForbidden = errors.New("forbidden")
 // Event represents a conference event
 // swagger:model Event
 type Event struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	EventCode    string     `json:"event_code"`
-	OwnerID      string     `json:"owner_id"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	Date         *time.Time `json:"date,omitempty"`
-	Description  *string    `json:"description,omitempty"`
-	LocationLat  *float64   `json:"location_lat,omitempty"`
-	LocationLng  *float64   `json:"location_lng,omitempty"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	EventCode   string     `json:"event_code"`
+	OwnerID     string     `json:"owner_id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	Date        *time.Time `json:"date,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	LocationLat *float64   `json:"location_lat,omitempty"`
+	LocationLng *float64   `json:"location_lng,omitempty"`
 }
 
 // NewEvent returns a new Event with the given fields. ID is typically set by the repository on create.
@@ -43,6 +43,8 @@ type EventService interface {
 	CreateEvent(ctx context.Context, event *Event) error
 	GetEventByID(ctx context.Context, eventID string) (*Event, []*Room, []*Session, error)
 	UpdateEvent(ctx context.Context, eventID, ownerID string, date *time.Time, description *string, locationLat, locationLng *float64) (*Event, error)
+	CreateEventRoom(ctx context.Context, eventID, ownerID, name string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
+	CreateEventSession(ctx context.Context, eventID, ownerID, roomID, title, description string, startTime, endTime time.Time, tagNames, speakerIDs []string) (*Session, error)
 	UpdateSessionSchedule(ctx context.Context, eventID, sessionID, ownerID string, roomID *string, startTime, endTime *time.Time) (*Session, error)
 	UpdateSessionContent(ctx context.Context, eventID, sessionID, ownerID string, title *string, description *string) (*Session, error)
 	ImportSessionizeData(ctx context.Context, eventID string, sessionizeID string) error
@@ -64,6 +66,7 @@ type EventService interface {
 	RemoveEventTeamMember(ctx context.Context, eventID, userIDToRemove, ownerID string) error
 	SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error)
 	ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params PaginationParams) ([]*EventInvitation, int, error)
+	ListEventTags(ctx context.Context, eventID, callerID string) ([]*Tag, error)
 }
 
 // EventRepository defines the interface for event storage

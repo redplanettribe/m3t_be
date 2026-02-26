@@ -33,6 +33,31 @@ func (r *tagRepository) EnsureTagForEvent(ctx context.Context, eventID, tagName 
 	return tagID, nil
 }
 
+func (r *tagRepository) ListTagsByEventID(ctx context.Context, eventID string) ([]*domain.Tag, error) {
+	rows, err := r.DB.QueryContext(ctx,
+		`SELECT t.id, t.name FROM tags t
+		 JOIN event_tags et ON et.tag_id = t.id
+		 WHERE et.event_id = $1
+		 ORDER BY t.name`, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []*domain.Tag
+	for rows.Next() {
+		var tag domain.Tag
+		if err := rows.Scan(&tag.ID, &tag.Name); err != nil {
+			return nil, err
+		}
+		tags = append(tags, &tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
 func (r *tagRepository) SetSessionTags(ctx context.Context, sessionID string, tagIDs []string) error {
 	if _, err := r.DB.ExecContext(ctx, `DELETE FROM session_tags WHERE session_id = $1`, sessionID); err != nil {
 		return err

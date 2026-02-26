@@ -436,10 +436,10 @@ func (f *fakeSessionRepo) UpdateSessionContent(ctx context.Context, sessionID st
 
 // fakeTagRepo is an in-memory TagRepository for tests.
 type fakeTagRepo struct {
-	byName     map[string]string // tag name -> tag ID
-	eventTags  map[string]map[string]bool
+	byName      map[string]string // tag name -> tag ID
+	eventTags   map[string]map[string]bool
 	sessionTags map[string][]string
-	nextID     int
+	nextID      int
 }
 
 func newFakeTagRepo() *fakeTagRepo {
@@ -468,6 +468,37 @@ func (f *fakeTagRepo) EnsureTagForEvent(ctx context.Context, eventID, tagName st
 func (f *fakeTagRepo) SetSessionTags(ctx context.Context, sessionID string, tagIDs []string) error {
 	f.sessionTags[sessionID] = append([]string(nil), tagIDs...)
 	return nil
+}
+
+func (f *fakeTagRepo) ListTagsByEventID(ctx context.Context, eventID string) ([]*domain.Tag, error) {
+	tagIDs, ok := f.eventTags[eventID]
+	if !ok {
+		return nil, nil
+	}
+	nameByID := make(map[string]string)
+	for name, id := range f.byName {
+		nameByID[id] = name
+	}
+	var tags []*domain.Tag
+	for id := range tagIDs {
+		tags = append(tags, &domain.Tag{ID: id, Name: nameByID[id]})
+	}
+	return tags, nil
+}
+
+// helper to build a default event service for tests
+func newTestEventService(eventRepo domain.EventRepository, sessionRepo domain.SessionRepository, fetcher domain.SessionFetcher, timeout time.Duration) *eventService {
+	return NewEventService(
+		eventRepo,
+		sessionRepo,
+		newFakeTagRepo(),
+		newFakeEventTeamMemberRepo(),
+		newFakeUserRepoForSchedule(),
+		newFakeEventInvitationRepo(),
+		newFakeEmailService(),
+		fetcher,
+		timeout,
+	).(*eventService)
 }
 
 // fakeSessionizeFetcher returns fixed data or a configurable error.
@@ -664,13 +695,13 @@ func defaultSessionizeData() domain.SessionFetcherResponse {
 	return domain.SessionFetcherResponse{
 		Sessions: []domain.SessionFetcherSession{
 			{
-				ID:           "s1",
-				Title:        "Talk 1",
-				Description:  "A talk",
-				StartsAt:     time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC),
-				EndsAt:       time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC),
-				RoomID:       1,
-				Speakers:     []string{"sp-uuid-1"},
+				ID:            "s1",
+				Title:         "Talk 1",
+				Description:   "A talk",
+				StartsAt:      time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC),
+				EndsAt:        time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC),
+				RoomID:        1,
+				Speakers:      []string{"sp-uuid-1"},
 				CategoryItems: []int{101, 102},
 			},
 		},
@@ -846,9 +877,9 @@ func TestEventService_UpdateEvent(t *testing.T) {
 				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-missing",
-			ownerID:     "user-1",
-			date:        &eventDate,
-			wantErr:     true,
+			ownerID:      "user-1",
+			date:         &eventDate,
+			wantErr:      true,
 			wantNotFound: true,
 		},
 		{
@@ -1195,6 +1226,140 @@ func TestEventService_DeleteEvent(t *testing.T) {
 			if tt.assertDeleted {
 				_, err := eventRepo.GetByID(ctx, tt.eventID)
 				require.True(t, errors.Is(err, domain.ErrNotFound), "event should be deleted")
+			}
+		})
+	}
+}
+
+func TestEventService_CreateEventRoom(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	now := time.Now()
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
+		eventID       string
+		ownerID       string
+		nameArg       string
+		capacity      int
+		description   string
+		howToGetThere string
+		notBookable   bool
+		wantErr       bool
+		wantNotFound  bool
+		wantForbidden bool
+		assert        func(t *testing.T, room *domain.Room, sessionRepo *fakeSessionRepo)
+	}{
+		{
+			name: "success creates room with expected fields",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{
+					ID:        "ev-1",
+					Name:      "Conf",
+					OwnerID:   "user-1",
+					CreatedAt: now,
+					UpdatedAt: now,
+				})
+				sr := newFakeSessionRepo()
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			ownerID:       "user-1",
+			nameArg:       "Room A",
+			capacity:      50,
+			description:   "Big room",
+			howToGetThere: "Floor 2",
+			notBookable:   false,
+			assert: func(t *testing.T, room *domain.Room, sr *fakeSessionRepo) {
+				require.NotNil(t, room)
+				assert.Equal(t, "ev-1", room.EventID)
+				assert.Equal(t, "Room A", room.Name)
+				assert.Equal(t, 50, room.Capacity)
+				assert.Equal(t, "Big room", room.Description)
+				assert.Equal(t, "Floor 2", room.HowToGetThere)
+				assert.Equal(t, false, room.NotBookable)
+				assert.Equal(t, "admin_app", room.Source)
+				assert.Equal(t, 0, room.SourceSessionID)
+				// Ensure it was persisted via fakeSessionRepo
+				require.Len(t, sr.rooms, 1)
+				require.Equal(t, room.ID, sr.rooms[0].ID)
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-missing",
+			ownerID:      "user-1",
+			nameArg:      "Room A",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden when not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{
+					ID:        "ev-1",
+					Name:      "Conf",
+					OwnerID:   "user-1",
+					CreatedAt: now,
+					UpdatedAt: now,
+				})
+				return er, newFakeSessionRepo(), &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			ownerID:       "user-2",
+			nameArg:       "Room A",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name: "repo error is wrapped",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{
+					ID:        "ev-1",
+					Name:      "Conf",
+					OwnerID:   "user-1",
+					CreatedAt: now,
+					UpdatedAt: now,
+				})
+				sr := newFakeSessionRepo()
+				sr.createRoomErr = errors.New("db failure")
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:      "ev-1",
+			ownerID:      "user-1",
+			nameArg:      "Room A",
+			wantErr:      true,
+			wantNotFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sessionRepo, fetcher := tt.setup()
+			sr, _ := sessionRepo.(*fakeSessionRepo)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			room, err := svc.CreateEventRoom(ctx, tt.eventID, tt.ownerID, tt.nameArg, tt.capacity, tt.description, tt.howToGetThere, tt.notBookable)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.assert != nil {
+				tt.assert(t, room, sr)
 			}
 		})
 	}
@@ -1874,6 +2039,233 @@ func TestEventService_DeleteEventSession(t *testing.T) {
 	}
 }
 
+func TestEventService_CreateEventSession(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	start := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC)
+
+	type args struct {
+		eventID     string
+		ownerID     string
+		roomID      string
+		title       string
+		description string
+		startTime   time.Time
+		endTime     time.Time
+		tags        []string
+		speakerIDs  []string
+	}
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo)
+		args          args
+		wantErr       bool
+		wantNotFound  bool
+		wantForbidden bool
+		wantInvalid   bool
+		assert        func(t *testing.T, sr *fakeSessionRepo, tr *fakeTagRepo, sess *domain.Session)
+	}{
+		{
+			name: "success with tags and speakers",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.speakers = []*domain.Speaker{
+					{ID: "sp-1", EventID: "ev-1", FullName: "Alice"},
+					{ID: "sp-2", EventID: "ev-1", FullName: "Bob"},
+				}
+				tr := newFakeTagRepo()
+				return er, sr, &fakeSessionizeFetcher{}, tr
+			},
+			args: args{
+				eventID:     "ev-1",
+				ownerID:     "user-1",
+				roomID:      "room-1",
+				title:       "Talk",
+				description: "Desc",
+				startTime:   start,
+				endTime:     end,
+				tags:        []string{"go", "conf"},
+				speakerIDs:  []string{"sp-1", "sp-2"},
+			},
+			assert: func(t *testing.T, sr *fakeSessionRepo, tr *fakeTagRepo, sess *domain.Session) {
+				require.NotNil(t, sess)
+				require.Len(t, sr.sessions, 1)
+				assert.Equal(t, sess.ID, sr.sessions[0].ID)
+				assert.Equal(t, "room-1", sess.RoomID)
+				assert.Equal(t, "Talk", sess.Title)
+				assert.Equal(t, "Desc", sess.Description)
+				assert.True(t, sess.StartTime.Equal(start))
+				assert.True(t, sess.EndTime.Equal(end))
+				require.Len(t, tr.sessionTags, 1)
+				tagIDs := tr.sessionTags[sess.ID]
+				require.Len(t, tagIDs, 2)
+				require.Len(t, sr.sessionSpeakers, 2)
+				assert.Equal(t, sess.ID, sr.sessionSpeakers[0].sessionID)
+				assert.Equal(t, "sp-1", sr.sessionSpeakers[0].speakerID)
+				assert.Equal(t, sess.ID, sr.sessionSpeakers[1].sessionID)
+				assert.Equal(t, "sp-2", sr.sessionSpeakers[1].speakerID)
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeSessionRepo(), &fakeSessionizeFetcher{}, newFakeTagRepo()
+			},
+			args: args{
+				eventID:   "ev-missing",
+				ownerID:   "user-1",
+				roomID:    "room-1",
+				title:     "Talk",
+				startTime: start,
+				endTime:   end,
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				return er, sr, &fakeSessionizeFetcher{}, newFakeTagRepo()
+			},
+			args: args{
+				eventID:   "ev-1",
+				ownerID:   "user-2",
+				roomID:    "room-1",
+				title:     "Talk",
+				startTime: start,
+				endTime:   end,
+			},
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name: "room not in event",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-other", Name: "Room A"}}
+				return er, sr, &fakeSessionizeFetcher{}, newFakeTagRepo()
+			},
+			args: args{
+				eventID:   "ev-1",
+				ownerID:   "user-1",
+				roomID:    "room-1",
+				title:     "Talk",
+				startTime: start,
+				endTime:   end,
+			},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "invalid time range",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				return er, sr, &fakeSessionizeFetcher{}, newFakeTagRepo()
+			},
+			args: args{
+				eventID:   "ev-1",
+				ownerID:   "user-1",
+				roomID:    "room-1",
+				title:     "Talk",
+				startTime: end,
+				endTime:   start,
+			},
+			wantErr:     true,
+			wantInvalid: true,
+		},
+		{
+			name: "speaker not in event",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, domain.SessionFetcher, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.speakers = []*domain.Speaker{
+					{ID: "sp-1", EventID: "ev-other", FullName: "Alice"},
+				}
+				return er, sr, &fakeSessionizeFetcher{}, newFakeTagRepo()
+			},
+			args: args{
+				eventID:     "ev-1",
+				ownerID:     "user-1",
+				roomID:      "room-1",
+				title:       "Talk",
+				description: "Desc",
+				startTime:   start,
+				endTime:     end,
+				speakerIDs:  []string{"sp-1"},
+			},
+			wantErr:     true,
+			wantInvalid: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eventRepo, sr, fetcher, tr := tt.setup()
+
+			svc := NewEventService(
+				eventRepo,
+				sr,
+				tr,
+				newFakeEventTeamMemberRepo(),
+				newFakeUserRepoForSchedule(),
+				newFakeEventInvitationRepo(),
+				newFakeEmailService(),
+				fetcher,
+				timeout,
+			)
+
+			got, err := svc.CreateEventSession(
+				ctx,
+				tt.args.eventID,
+				tt.args.ownerID,
+				tt.args.roomID,
+				tt.args.title,
+				tt.args.description,
+				tt.args.startTime,
+				tt.args.endTime,
+				tt.args.tags,
+				tt.args.speakerIDs,
+			)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				if tt.wantInvalid {
+					require.True(t, errors.Is(err, domain.ErrInvalidInput))
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			if tt.assert != nil {
+				tt.assert(t, sr, tr, got)
+			}
+		})
+	}
+}
+
 func TestEventService_ListEventSpeakers(t *testing.T) {
 	ctx := context.Background()
 	timeout := 5 * time.Second
@@ -2187,21 +2579,21 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 	timeout := 5 * time.Second
 
 	tests := []struct {
-		name          string
-		setup         func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
-		eventID       string
-		ownerID       string
-		firstName     string
-		lastName      string
-		fullName      string
-		bio           string
-		tagLine       string
+		name           string
+		setup          func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher)
+		eventID        string
+		ownerID        string
+		firstName      string
+		lastName       string
+		fullName       string
+		bio            string
+		tagLine        string
 		profilePicture string
-		isTopSpeaker  bool
-		wantErr       bool
-		wantForbidden bool
-		wantNotFound  bool
-		assert        func(t *testing.T, speaker *domain.Speaker)
+		isTopSpeaker   bool
+		wantErr        bool
+		wantForbidden  bool
+		wantNotFound   bool
+		assert         func(t *testing.T, speaker *domain.Speaker)
 	}{
 		{
 			name: "success creates speaker with generated sessionize_speaker_id",
@@ -2211,13 +2603,13 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 				sr := newFakeSessionRepo()
 				return er, sr, &fakeSessionizeFetcher{}
 			},
-			eventID:        "ev-1",
-			ownerID:        "user-1",
-			firstName:      "Jane",
-			lastName:       "Doe",
-			fullName:       "Jane Doe",
-			bio:            "Bio",
-			isTopSpeaker:   true,
+			eventID:      "ev-1",
+			ownerID:      "user-1",
+			firstName:    "Jane",
+			lastName:     "Doe",
+			fullName:     "Jane Doe",
+			bio:          "Bio",
+			isTopSpeaker: true,
 			assert: func(t *testing.T, speaker *domain.Speaker) {
 				require.NotNil(t, speaker)
 				assert.NotEmpty(t, speaker.ID)
@@ -3359,6 +3751,99 @@ func TestEventService_UpdateSessionContent(t *testing.T) {
 			if tt.assert != nil {
 				tt.assert(t, got)
 			}
+		})
+	}
+}
+
+func TestEventService_ListEventTags(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (*fakeEventRepo, *fakeTagRepo)
+		eventID       string
+		callerID      string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		wantLen       int
+	}{
+		{
+			name: "success returns tags",
+			setup: func() (*fakeEventRepo, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Rust")
+				return er, tr
+			},
+			eventID:  "ev-1",
+			callerID: "user-1",
+			wantLen:  2,
+		},
+		{
+			name: "success empty tags",
+			setup: func() (*fakeEventRepo, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeTagRepo()
+			},
+			eventID:  "ev-1",
+			callerID: "user-1",
+			wantLen:  0,
+		},
+		{
+			name: "event not found",
+			setup: func() (*fakeEventRepo, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeTagRepo()
+			},
+			eventID:      "ev-missing",
+			callerID:     "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (*fakeEventRepo, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeTagRepo()
+			},
+			eventID:       "ev-1",
+			callerID:      "user-2",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			er, tr := tt.setup()
+			svc := NewEventService(
+				er,
+				newFakeSessionRepo(),
+				tr,
+				newFakeEventTeamMemberRepo(),
+				newFakeUserRepoForSchedule(),
+				newFakeEventInvitationRepo(),
+				newFakeEmailService(),
+				&fakeSessionizeFetcher{},
+				timeout,
+			)
+			tags, err := svc.ListEventTags(ctx, tt.eventID, tt.callerID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, tags, tt.wantLen)
 		})
 	}
 }
