@@ -112,6 +112,25 @@ func (s *eventService) GetEventByID(ctx context.Context, eventID string) (*domai
 		sessions = []*domain.Session{}
 	}
 
+	// Enrich sessions with speaker IDs for GET event response
+	if len(sessions) > 0 {
+		sessionIDs := make([]string, 0, len(sessions))
+		for _, sess := range sessions {
+			sessionIDs = append(sessionIDs, sess.ID)
+		}
+		speakerIDsBySession, err := s.sessionRepo.ListSpeakerIDsBySessionIDs(ctx, sessionIDs)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("list speaker IDs by session: %w", err)
+		}
+		for _, sess := range sessions {
+			if ids, ok := speakerIDsBySession[sess.ID]; ok {
+				sess.SpeakerIDs = ids
+			} else {
+				sess.SpeakerIDs = []string{}
+			}
+		}
+	}
+
 	return event, rooms, sessions, nil
 }
 
@@ -139,21 +158,33 @@ func (s *eventService) UpdateEvent(ctx context.Context, eventID, ownerID string,
 	return updated, nil
 }
 
-// deriveTags collects all category item names from session categories, deduped.
-func deriveTags(categories []domain.SessionCategory) []string {
+// buildCategoryItemIDToName flattens All API categories into categoryItemID -> name.
+func buildCategoryItemIDToName(categories []domain.SessionFetcherCategory) map[int]string {
+	m := make(map[int]string)
+	for _, cat := range categories {
+		for _, item := range cat.Items {
+			if item.Name != "" {
+				m[item.ID] = item.Name
+			}
+		}
+	}
+	return m
+}
+
+// deriveTagsFromCategoryItems returns tag names for the given category item IDs (All API).
+func deriveTagsFromCategoryItems(categoryItemIDs []int, idToName map[int]string) []string {
 	seen := make(map[string]struct{})
 	var out []string
-	for _, cat := range categories {
-		for _, item := range cat.CategoryItems {
-			if item.Name == "" {
-				continue
-			}
-			if _, ok := seen[item.Name]; ok {
-				continue
-			}
-			seen[item.Name] = struct{}{}
-			out = append(out, item.Name)
+	for _, id := range categoryItemIDs {
+		name := idToName[id]
+		if name == "" {
+			continue
 		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
 	}
 	return out
 }
@@ -162,58 +193,74 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
-	// 1. Fetch data from session fetcher
+	// 1. Fetch data from Sessionize All API
 	sessionData, err := s.sf.Fetch(ctx, sourceID)
 	if err != nil {
 		return err
 	}
 
-	// 2. Clear existing schedule
+	// 2. Clear existing schedule and speakers
 	if err := s.sessionRepo.DeleteScheduleByEventID(ctx, eventID); err != nil {
 		return fmt.Errorf("failed to delete existing schedule: %w", err)
 	}
-
-	// 3. Import new data
-	// Group rooms by ID to avoid duplicates across dates (if any)
-	uniqueRooms := make(map[int]string) // id -> name
-
-	for _, grid := range sessionData {
-		for _, room := range grid.Rooms {
-			uniqueRooms[room.ID] = room.Name
-		}
+	if err := s.sessionRepo.DeleteSpeakersByEventID(ctx, eventID); err != nil {
+		return fmt.Errorf("failed to delete existing speakers: %w", err)
 	}
 
-	// Insert Rooms
-	roomMap := make(map[int]string) // source_id -> domain_id
-	for sID, name := range uniqueRooms {
+	// 3. Insert rooms from flat list
+	roomMap := make(map[int]string) // Sessionize room ID -> domain room ID
+	for _, room := range sessionData.Rooms {
 		now := time.Now()
-		r := domain.NewRoom(eventID, name, sID, false, 0, "", "", now, now)
+		r := domain.NewRoom(eventID, room.Name, room.ID, false, 0, "", "", now, now)
 		if err := s.sessionRepo.CreateRoom(ctx, r); err != nil {
-			return fmt.Errorf("failed to create room %s: %w", name, err)
+			return fmt.Errorf("failed to create room %s: %w", room.Name, err)
 		}
-		roomMap[sID] = r.ID
+		roomMap[room.ID] = r.ID
 	}
 
-	// Insert Sessions
-	for _, grid := range sessionData {
-		for _, room := range grid.Rooms {
-			domainRoomID, ok := roomMap[room.ID]
+	// 4. Build category item ID -> name for tag derivation
+	categoryIDToName := buildCategoryItemIDToName(sessionData.Categories)
+
+	// 5. Insert sessions
+	sessionMap := make(map[string]string) // Sessionize session ID -> domain session ID
+	for _, sess := range sessionData.Sessions {
+		domainRoomID, ok := roomMap[sess.RoomID]
+		if !ok {
+			continue // Skip session if room not found
+		}
+		tags := deriveTagsFromCategoryItems(sess.CategoryItems, categoryIDToName)
+		now := time.Now()
+		domainSess := domain.NewSession(domainRoomID, sess.ID, sess.Title, sess.Description, sess.StartsAt, sess.EndsAt, tags, now, now)
+		if err := s.sessionRepo.CreateSession(ctx, domainSess); err != nil {
+			return fmt.Errorf("failed to create session %s: %w", sess.Title, err)
+		}
+		sessionMap[sess.ID] = domainSess.ID
+	}
+
+	// 6. Insert speakers
+	speakerMap := make(map[string]string) // Sessionize speaker UUID -> domain speaker ID
+	for _, sp := range sessionData.Speakers {
+		now := time.Now()
+		domainSp := domain.NewSpeaker(eventID, sp.ID, sp.FirstName, sp.LastName, sp.FullName, sp.Bio, sp.TagLine, sp.ProfilePicture, sp.IsTopSpeaker, now, now)
+		if err := s.sessionRepo.CreateSpeaker(ctx, domainSp); err != nil {
+			return fmt.Errorf("failed to create speaker %s: %w", sp.FullName, err)
+		}
+		speakerMap[sp.ID] = domainSp.ID
+	}
+
+	// 7. Link sessions to speakers
+	for _, sess := range sessionData.Sessions {
+		domainSessionID, ok := sessionMap[sess.ID]
+		if !ok {
+			continue
+		}
+		for _, speakerUUID := range sess.Speakers {
+			domainSpeakerID, ok := speakerMap[speakerUUID]
 			if !ok {
-				continue // Should not happen
+				continue
 			}
-
-			for _, session := range room.Sessions {
-				desc := ""
-				if session.Description != nil {
-					desc = *session.Description
-				}
-				tags := deriveTags(session.Categories)
-				now := time.Now()
-				sess := domain.NewSession(domainRoomID, session.ID, session.Title, desc, session.StartsAt, session.EndsAt, tags, now, now)
-
-				if err := s.sessionRepo.CreateSession(ctx, sess); err != nil {
-					return fmt.Errorf("failed to create session %s: %w", session.Title, err)
-				}
+			if err := s.sessionRepo.CreateSessionSpeaker(ctx, domainSessionID, domainSpeakerID); err != nil {
+				return fmt.Errorf("failed to link session to speaker: %w", err)
 			}
 		}
 	}

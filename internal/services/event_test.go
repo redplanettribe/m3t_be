@@ -105,10 +105,14 @@ func (f *fakeEventRepo) Update(ctx context.Context, eventID string, date *time.T
 type fakeSessionRepo struct {
 	rooms                []*domain.Room
 	sessions             []*domain.Session
+	speakers             []*domain.Speaker
+	sessionSpeakers      []struct{ sessionID, speakerID string }
 	roomID               int
 	sessID               int
+	speakerID            int
 	createRoomErr        error
 	createSessionErr     error
+	createSpeakerErr     error
 	deleteErr            error
 	updateRoomDetailsErr error
 	deleteRoomErr        error
@@ -116,10 +120,13 @@ type fakeSessionRepo struct {
 
 func newFakeSessionRepo() *fakeSessionRepo {
 	return &fakeSessionRepo{
-		rooms:    nil,
-		sessions: nil,
-		roomID:   1,
-		sessID:   1,
+		rooms:           nil,
+		sessions:        nil,
+		speakers:        nil,
+		sessionSpeakers: nil,
+		roomID:          1,
+		sessID:          1,
+		speakerID:       1,
 	}
 }
 
@@ -140,6 +147,21 @@ func (f *fakeSessionRepo) CreateSession(ctx context.Context, s *domain.Session) 
 	s.ID = fmt.Sprintf("sess-%d", f.sessID)
 	f.sessID++
 	f.sessions = append(f.sessions, s)
+	return nil
+}
+
+func (f *fakeSessionRepo) CreateSpeaker(ctx context.Context, sp *domain.Speaker) error {
+	if f.createSpeakerErr != nil {
+		return f.createSpeakerErr
+	}
+	sp.ID = fmt.Sprintf("sp-%d", f.speakerID)
+	f.speakerID++
+	f.speakers = append(f.speakers, sp)
+	return nil
+}
+
+func (f *fakeSessionRepo) CreateSessionSpeaker(ctx context.Context, sessionID, speakerID string) error {
+	f.sessionSpeakers = append(f.sessionSpeakers, struct{ sessionID, speakerID string }{sessionID, speakerID})
 	return nil
 }
 
@@ -164,6 +186,32 @@ func (f *fakeSessionRepo) DeleteScheduleByEventID(ctx context.Context, eventID s
 		}
 	}
 	f.sessions = sessions
+	return nil
+}
+
+func (f *fakeSessionRepo) DeleteSpeakersByEventID(ctx context.Context, eventID string) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	var speakers []*domain.Speaker
+	for _, sp := range f.speakers {
+		if sp.EventID != eventID {
+			speakers = append(speakers, sp)
+		}
+	}
+	f.speakers = speakers
+	// Remove session_speakers that reference deleted speakers
+	speakerIDs := make(map[string]bool)
+	for _, sp := range f.speakers {
+		speakerIDs[sp.ID] = true
+	}
+	var kept []struct{ sessionID, speakerID string }
+	for _, ss := range f.sessionSpeakers {
+		if speakerIDs[ss.speakerID] {
+			kept = append(kept, ss)
+		}
+	}
+	f.sessionSpeakers = kept
 	return nil
 }
 
@@ -257,6 +305,19 @@ func (f *fakeSessionRepo) ListSessionsByEventID(ctx context.Context, eventID str
 	return out, nil
 }
 
+func (f *fakeSessionRepo) ListSpeakerIDsBySessionIDs(ctx context.Context, sessionIDs []string) (map[string][]string, error) {
+	out := make(map[string][]string)
+	for _, sid := range sessionIDs {
+		out[sid] = []string{}
+	}
+	for _, ss := range f.sessionSpeakers {
+		if _, ok := out[ss.sessionID]; ok {
+			out[ss.sessionID] = append(out[ss.sessionID], ss.speakerID)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeSessionRepo) GetSessionByID(ctx context.Context, sessionID string) (*domain.Session, error) {
 	for _, s := range f.sessions {
 		if s.ID == sessionID {
@@ -307,7 +368,7 @@ type fakeSessionizeFetcher struct {
 
 func (f *fakeSessionizeFetcher) Fetch(ctx context.Context, sessionizeID string) (domain.SessionFetcherResponse, error) {
 	if f.err != nil {
-		return nil, f.err
+		return domain.SessionFetcherResponse{}, f.err
 	}
 	return f.data, nil
 }
@@ -488,31 +549,46 @@ func (f *fakeEmailService) SendEventInvitation(ctx context.Context, data *domain
 	return nil
 }
 
-// defaultSessionizeData returns a minimal valid SessionizeResponse for tests.
+// defaultSessionizeData returns a minimal valid Sessionize All API response for tests.
 func defaultSessionizeData() domain.SessionFetcherResponse {
-	desc := "A talk"
 	return domain.SessionFetcherResponse{
-		{
-			Date: "2025-03-01",
-			Rooms: []domain.SessionFetcherRoom{
-				{
-					ID:   1,
-					Name: "Room A",
-					Sessions: []domain.SessionFetcherSession{
-						{
-							ID:          "s1",
-							Title:       "Talk 1",
-							Description: &desc,
-							StartsAt:    time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC),
-							EndsAt:      time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC),
-							RoomID:      1,
-							Categories: []domain.SessionCategory{
-								{Name: "Tipo de sesión", CategoryItems: []domain.TagItem{{Name: "Conferencia"}}},
-								{Name: "Event tag", CategoryItems: []domain.TagItem{{Name: "ai"}, {Name: "web"}}},
-							},
-						},
-					},
+		Sessions: []domain.SessionFetcherSession{
+			{
+				ID:           "s1",
+				Title:        "Talk 1",
+				Description:  "A talk",
+				StartsAt:     time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC),
+				EndsAt:       time.Date(2025, 3, 1, 11, 0, 0, 0, time.UTC),
+				RoomID:       1,
+				Speakers:     []string{"sp-uuid-1"},
+				CategoryItems: []int{101, 102},
+			},
+		},
+		Speakers: []domain.SessionFetcherSpeaker{
+			{
+				ID:             "sp-uuid-1",
+				FirstName:      "Jane",
+				LastName:       "Doe",
+				FullName:       "Jane Doe",
+				Bio:            "Speaker bio",
+				TagLine:        "Engineer",
+				ProfilePicture: "",
+				IsTopSpeaker:   false,
+			},
+		},
+		Rooms: []domain.SessionFetcherRoom{
+			{ID: 1, Name: "Room A", Sort: 0},
+		},
+		Categories: []domain.SessionFetcherCategory{
+			{
+				ID:    1,
+				Title: "Event tag",
+				Items: []domain.SessionFetcherCategoryItem{
+					{ID: 101, Name: "Conferencia", Sort: 1},
+					{ID: 102, Name: "ai", Sort: 2},
 				},
+				Sort: 0,
+				Type: "session",
 			},
 		},
 	}
@@ -730,7 +806,10 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 				assert.Equal(t, "Room A", sessionRepo.rooms[0].Name)
 				require.Len(t, sessionRepo.sessions, 1)
 				assert.Equal(t, "Talk 1", sessionRepo.sessions[0].Title)
-				assert.ElementsMatch(t, []string{"Conferencia", "ai", "web"}, sessionRepo.sessions[0].Tags)
+				assert.ElementsMatch(t, []string{"Conferencia", "ai"}, sessionRepo.sessions[0].Tags)
+				require.Len(t, sessionRepo.speakers, 1)
+				assert.Equal(t, "Jane Doe", sessionRepo.speakers[0].FullName)
+				require.Len(t, sessionRepo.sessionSpeakers, 1)
 			},
 		},
 		{

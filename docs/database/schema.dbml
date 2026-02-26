@@ -63,6 +63,37 @@ Table session_tags {
   }
 }
 
+Table speakers {
+  id uuid [pk, default: `gen_random_uuid()`]
+  event_id uuid [not null, ref: > events.id]
+  sessionize_speaker_id varchar(100) [not null]
+  first_name varchar(255) [not null, default: `''`]
+  last_name varchar(255) [not null, default: `''`]
+  full_name varchar(512) [not null, default: `''`]
+  bio text [not null, default: `''`]
+  tag_line varchar(512) [not null, default: `''`]
+  profile_picture text [not null, default: `''`]
+  is_top_speaker boolean [not null, default: `false`]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (event_id, sessionize_speaker_id) [unique]
+    event_id
+  }
+}
+
+Table session_speakers {
+  session_id uuid [not null, ref: > sessions.id]
+  speaker_id uuid [not null, ref: > speakers.id]
+
+  indexes {
+    (session_id, speaker_id) [pk]
+    session_id
+    speaker_id
+  }
+}
+
 Table users {
   id uuid [pk, default: `gen_random_uuid()`]
   email varchar(255) [not null, unique]

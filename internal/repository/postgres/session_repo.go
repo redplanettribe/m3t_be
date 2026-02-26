@@ -53,8 +53,34 @@ func (r *SessionRepository) CreateSession(ctx context.Context, s *domain.Session
 	return nil
 }
 
+func (r *SessionRepository) CreateSpeaker(ctx context.Context, speaker *domain.Speaker) error {
+	query := `
+		INSERT INTO speakers (event_id, sessionize_speaker_id, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (event_id, sessionize_speaker_id) DO UPDATE
+		SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, full_name = EXCLUDED.full_name, bio = EXCLUDED.bio, tag_line = EXCLUDED.tag_line, profile_picture = EXCLUDED.profile_picture, is_top_speaker = EXCLUDED.is_top_speaker, updated_at = EXCLUDED.updated_at
+		RETURNING id
+	`
+	return r.DB.QueryRowContext(ctx, query,
+		speaker.EventID, speaker.SessionizeSpeakerID, speaker.FirstName, speaker.LastName, speaker.FullName,
+		speaker.Bio, speaker.TagLine, speaker.ProfilePicture, speaker.IsTopSpeaker, speaker.CreatedAt, speaker.UpdatedAt,
+	).Scan(&speaker.ID)
+}
+
+func (r *SessionRepository) CreateSessionSpeaker(ctx context.Context, sessionID, speakerID string) error {
+	query := `INSERT INTO session_speakers (session_id, speaker_id) VALUES ($1, $2) ON CONFLICT (session_id, speaker_id) DO NOTHING`
+	_, err := r.DB.ExecContext(ctx, query, sessionID, speakerID)
+	return err
+}
+
 func (r *SessionRepository) DeleteScheduleByEventID(ctx context.Context, eventID string) error {
 	query := `DELETE FROM rooms WHERE event_id = $1`
+	_, err := r.DB.ExecContext(ctx, query, eventID)
+	return err
+}
+
+func (r *SessionRepository) DeleteSpeakersByEventID(ctx context.Context, eventID string) error {
+	query := `DELETE FROM speakers WHERE event_id = $1`
 	_, err := r.DB.ExecContext(ctx, query, eventID)
 	return err
 }
@@ -200,6 +226,14 @@ func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	sess.SpeakerIDs = []string{}
+	speakerMap, err := r.ListSpeakerIDsBySessionIDs(ctx, []string{sessionID})
+	if err != nil {
+		return nil, err
+	}
+	if ids := speakerMap[sessionID]; len(ids) > 0 {
+		sess.SpeakerIDs = ids
+	}
 	return sess, nil
 }
 
@@ -224,6 +258,7 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 			return nil, err
 		}
 		sess.Tags = []string{}
+		sess.SpeakerIDs = []string{}
 		sessions = append(sessions, sess)
 		sessionIDs = append(sessionIDs, sess.ID)
 	}
@@ -255,6 +290,30 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 		}
 	}
 	return sessions, nil
+}
+
+// ListSpeakerIDsBySessionIDs returns for each session ID the list of speaker IDs (order preserved).
+func (r *SessionRepository) ListSpeakerIDsBySessionIDs(ctx context.Context, sessionIDs []string) (map[string][]string, error) {
+	if len(sessionIDs) == 0 {
+		return map[string][]string{}, nil
+	}
+	rows, err := r.DB.QueryContext(ctx, `SELECT session_id, speaker_id FROM session_speakers WHERE session_id = ANY($1) ORDER BY session_id, speaker_id`, pq.Array(sessionIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string][]string)
+	for rows.Next() {
+		var sessionID, speakerID string
+		if err := rows.Scan(&sessionID, &speakerID); err != nil {
+			return nil, err
+		}
+		out[sessionID] = append(out[sessionID], speakerID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *SessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {

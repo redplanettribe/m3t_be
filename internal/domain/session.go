@@ -47,6 +47,7 @@ type Session struct {
 	EndTime         time.Time `json:"end_time"`
 	Description     string    `json:"description"`
 	Tags            []string  `json:"tags"`
+	SpeakerIDs      []string  `json:"speaker_ids"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -65,20 +66,25 @@ func NewSession(roomID, sessionizeSessionID, title, description string, startTim
 		EndTime:         endTime,
 		Description:     description,
 		Tags:            tags,
+		SpeakerIDs:      []string{},
 		CreatedAt:       createdAt,
 		UpdatedAt:       updatedAt,
 	}
 }
 
-// SessionRepository defines the interface for session and room storage
+// SessionRepository defines the interface for session, room, and speaker storage
 type SessionRepository interface {
 	CreateRoom(ctx context.Context, room *Room) error
 	CreateSession(ctx context.Context, session *Session) error
+	CreateSpeaker(ctx context.Context, speaker *Speaker) error
+	CreateSessionSpeaker(ctx context.Context, sessionID, speakerID string) error
 	DeleteScheduleByEventID(ctx context.Context, eventID string) error
+	DeleteSpeakersByEventID(ctx context.Context, eventID string) error
 	GetSessionByID(ctx context.Context, sessionID string) (*Session, error)
 	GetRoomByID(ctx context.Context, roomID string) (*Room, error)
 	ListRoomsByEventID(ctx context.Context, eventID string) ([]*Room, error)
 	ListSessionsByEventID(ctx context.Context, eventID string) ([]*Session, error)
+	ListSpeakerIDsBySessionIDs(ctx context.Context, sessionIDs []string) (map[string][]string, error)
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
 	UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
 	DeleteRoom(ctx context.Context, roomID string) error

@@ -22,24 +22,24 @@ func NewHTTPFetcher(client *http.Client) domain.SessionFetcher {
 }
 
 func (f *sessionizeHTTPFetcher) Fetch(ctx context.Context, sessionizeID string) (domain.SessionFetcherResponse, error) {
-	url := fmt.Sprintf("https://sessionize.com/api/v2/%s/view/GridSmart", sessionizeID)
+	url := fmt.Sprintf("https://sessionize.com/api/v2/%s/view/All", sessionizeID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return domain.SessionFetcherResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch from sessionize: %w", err)
+		return domain.SessionFetcherResponse{}, fmt.Errorf("failed to fetch from sessionize: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("sessionize api returned status: %d", resp.StatusCode)
+		return domain.SessionFetcherResponse{}, fmt.Errorf("sessionize api returned status: %d", resp.StatusCode)
 	}
 
 	var data domain.SessionFetcherResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode sessionize response: %w", err)
+		return domain.SessionFetcherResponse{}, fmt.Errorf("failed to decode sessionize response: %w", err)
 	}
 	return data, nil
 }

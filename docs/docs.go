@@ -2405,6 +2405,12 @@ const docTemplate = `{
                 "source_session_id": {
                     "type": "string"
                 },
+                "speaker_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "start_time": {
                     "type": "string"
                 },
