@@ -8,43 +8,55 @@
       "name": "events",
       "schemaName": "public",
       "x": 832,
-      "y": 16
+      "y": 56
     },
     {
       "name": "rooms",
       "schemaName": "public",
       "x": 1328,
-      "y": 16
+      "y": 192
     },
     {
       "name": "sessions",
       "schemaName": "public",
       "x": 1888,
-      "y": 16
+      "y": 56
+    },
+    {
+      "name": "tags",
+      "schemaName": "public",
+      "x": 1888,
+      "y": -66.20893719806764
     },
     {
       "name": "session_tags",
       "schemaName": "public",
-      "x": 2408,
-      "y": 16
+      "x": 2432,
+      "y": 10.26449275362316
+    },
+    {
+      "name": "event_tags",
+      "schemaName": "public",
+      "x": 1328,
+      "y": 56
     },
     {
       "name": "speakers",
       "schemaName": "public",
       "x": 1328,
-      "y": 408
+      "y": 592
     },
     {
       "name": "session_speakers",
       "schemaName": "public",
-      "x": 2408,
+      "x": 2432,
       "y": 152
     },
     {
       "name": "users",
       "schemaName": "public",
       "x": 336,
-      "y": 16
+      "y": 152
     },
     {
       "name": "login_codes",
@@ -56,31 +68,31 @@
       "name": "event_team_members",
       "schemaName": "public",
       "x": 1328,
-      "y": 1080
+      "y": 1264
     },
     {
       "name": "roles",
       "schemaName": "public",
       "x": 336,
-      "y": 280
+      "y": 424
     },
     {
       "name": "user_roles",
       "schemaName": "public",
       "x": 832,
-      "y": 408
+      "y": 456
     },
     {
       "name": "event_registrations",
       "schemaName": "public",
       "x": 1328,
-      "y": 1224
+      "y": 1400
     },
     {
       "name": "event_invitations",
       "schemaName": "public",
       "x": 1328,
-      "y": 872
+      "y": 1056
     }
   ],
   "tableGroupCollapseStates": [],
@@ -142,6 +154,51 @@
         "session_id"
       ],
       "secondTableName": "session_tags",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "tags",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "tag_id"
+      ],
+      "secondTableName": "session_tags",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "events",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "event_id"
+      ],
+      "secondTableName": "event_tags",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "tags",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "tag_id"
+      ],
+      "secondTableName": "event_tags",
       "secondSchemaName": "public",
       "secondRelation": "*",
       "checkPoints": []

@@ -17,6 +17,7 @@ import (
 type eventService struct {
 	eventRepo           domain.EventRepository
 	sessionRepo         domain.SessionRepository
+	tagRepo             domain.TagRepository
 	eventTeamMemberRepo domain.EventTeamMemberRepository
 	userRepo            domain.UserRepository
 	invitationRepo      domain.EventInvitationRepository
@@ -27,6 +28,7 @@ type eventService struct {
 
 func NewEventService(eventRepo domain.EventRepository,
 	sessionRepo domain.SessionRepository,
+	tagRepo domain.TagRepository,
 	eventTeamMemberRepo domain.EventTeamMemberRepository,
 	userRepo domain.UserRepository,
 	invitationRepo domain.EventInvitationRepository,
@@ -37,6 +39,7 @@ func NewEventService(eventRepo domain.EventRepository,
 	return &eventService{
 		eventRepo:           eventRepo,
 		sessionRepo:         sessionRepo,
+		tagRepo:             tagRepo,
 		eventTeamMemberRepo: eventTeamMemberRepo,
 		userRepo:            userRepo,
 		invitationRepo:      invitationRepo,
@@ -229,11 +232,25 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 		if !ok {
 			continue // Skip session if room not found
 		}
-		tags := deriveTagsFromCategoryItems(sess.CategoryItems, categoryIDToName)
+		tagNames := deriveTagsFromCategoryItems(sess.CategoryItems, categoryIDToName)
 		now := time.Now()
-		domainSess := domain.NewSession(domainRoomID, sess.ID, sess.Title, sess.Description, sess.StartsAt, sess.EndsAt, tags, now, now)
+		domainSess := domain.NewSession(domainRoomID, sess.ID, sess.Title, sess.Description, sess.StartsAt, sess.EndsAt, tagNames, now, now)
 		if err := s.sessionRepo.CreateSession(ctx, domainSess); err != nil {
 			return fmt.Errorf("failed to create session %s: %w", sess.Title, err)
+		}
+		var tagIDs []string
+		for _, tagName := range tagNames {
+			if tagName == "" {
+				continue
+			}
+			tagID, err := s.tagRepo.EnsureTagForEvent(ctx, eventID, tagName)
+			if err != nil {
+				return fmt.Errorf("ensure tag %q for event: %w", tagName, err)
+			}
+			tagIDs = append(tagIDs, tagID)
+		}
+		if err := s.tagRepo.SetSessionTags(ctx, domainSess.ID, tagIDs); err != nil {
+			return fmt.Errorf("failed to set session tags: %w", err)
 		}
 		sessionMap[sess.ID] = domainSess.ID
 	}

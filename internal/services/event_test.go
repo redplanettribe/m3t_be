@@ -434,6 +434,42 @@ func (f *fakeSessionRepo) UpdateSessionContent(ctx context.Context, sessionID st
 	return nil, domain.ErrNotFound
 }
 
+// fakeTagRepo is an in-memory TagRepository for tests.
+type fakeTagRepo struct {
+	byName     map[string]string // tag name -> tag ID
+	eventTags  map[string]map[string]bool
+	sessionTags map[string][]string
+	nextID     int
+}
+
+func newFakeTagRepo() *fakeTagRepo {
+	return &fakeTagRepo{
+		byName:      make(map[string]string),
+		eventTags:   make(map[string]map[string]bool),
+		sessionTags: make(map[string][]string),
+		nextID:      1,
+	}
+}
+
+func (f *fakeTagRepo) EnsureTagForEvent(ctx context.Context, eventID, tagName string) (string, error) {
+	tagID, ok := f.byName[tagName]
+	if !ok {
+		tagID = fmt.Sprintf("tag-%d", f.nextID)
+		f.nextID++
+		f.byName[tagName] = tagID
+	}
+	if f.eventTags[eventID] == nil {
+		f.eventTags[eventID] = make(map[string]bool)
+	}
+	f.eventTags[eventID][tagID] = true
+	return tagID, nil
+}
+
+func (f *fakeTagRepo) SetSessionTags(ctx context.Context, sessionID string, tagIDs []string) error {
+	f.sessionTags[sessionID] = append([]string(nil), tagIDs...)
+	return nil
+}
+
 // fakeSessionizeFetcher returns fixed data or a configurable error.
 type fakeSessionizeFetcher struct {
 	data domain.SessionFetcherResponse
@@ -726,7 +762,7 @@ func TestEventService_CreateEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			ev := &domain.Event{Name: tt.event.Name, OwnerID: tt.event.OwnerID}
 			err := svc.CreateEvent(ctx, ev)
 			if tt.wantErr {
@@ -833,7 +869,7 @@ func TestEventService_UpdateEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			got, err := svc.UpdateEvent(ctx, tt.eventID, tt.ownerID, tt.date, tt.description, tt.locationLat, tt.locationLng)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -937,7 +973,7 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.ImportSessionizeData(ctx, tt.eventID, tt.sessID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -996,7 +1032,7 @@ func TestEventService_ListEventsByOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			events, err := svc.ListEventsByOwner(ctx, tt.ownerID)
 			require.NoError(t, err)
 			require.Len(t, events, tt.wantLen)
@@ -1075,7 +1111,7 @@ func TestEventService_GetEventByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			event, rooms, sessions, err := svc.GetEventByID(ctx, tt.eventID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1143,7 +1179,7 @@ func TestEventService_DeleteEvent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.DeleteEvent(ctx, tt.eventID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1275,7 +1311,7 @@ func TestEventService_ToggleRoomNotBookable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			room, err := svc.ToggleRoomNotBookable(ctx, tt.eventID, tt.roomID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1373,7 +1409,7 @@ func TestEventService_ListEventRooms(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			rooms, err := svc.ListEventRooms(ctx, tt.eventID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1488,7 +1524,7 @@ func TestEventService_GetEventRoom(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			room, err := svc.GetEventRoom(ctx, tt.eventID, tt.roomID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1606,7 +1642,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			room, err := svc.UpdateEventRoom(ctx, tt.eventID, tt.roomID, tt.ownerID, tt.capacity, tt.description, tt.howToGetThere, tt.notBookable)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1701,7 +1737,7 @@ func TestEventService_DeleteEventRoom(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.DeleteEventRoom(ctx, tt.eventID, tt.roomID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1816,7 +1852,7 @@ func TestEventService_DeleteEventSession(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.DeleteEventSession(ctx, tt.eventID, tt.sessionID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1913,7 +1949,7 @@ func TestEventService_ListEventSpeakers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			speakers, err := svc.ListEventSpeakers(ctx, tt.eventID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2031,7 +2067,7 @@ func TestEventService_GetEventSpeaker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			speaker, sessions, err := svc.GetEventSpeaker(ctx, tt.eventID, tt.speakerID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2124,7 +2160,7 @@ func TestEventService_DeleteEventSpeaker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			err := svc.DeleteEventSpeaker(ctx, tt.eventID, tt.speakerID, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2240,7 +2276,7 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			speaker, err := svc.CreateEventSpeaker(ctx, tt.eventID, tt.ownerID, tt.firstName, tt.lastName, tt.fullName, tt.bio, tt.tagLine, tt.profilePicture, tt.isTopSpeaker)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2341,7 +2377,7 @@ func TestEventService_AddEventTeamMember(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeTagRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			err := svc.AddEventTeamMember(ctx, tt.eventID, tt.userIDToAdd, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2431,7 +2467,7 @@ func TestEventService_ListEventTeamMembers(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeTagRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			got, err := svc.ListEventTeamMembers(ctx, tt.eventID, tt.callerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2550,7 +2586,7 @@ func TestEventService_ListEventInvitations(t *testing.T) {
 			if tt.setupInvitation != nil {
 				tt.setupInvitation(invRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), invRepo, newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), invRepo, newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			got, total, err := svc.ListEventInvitations(ctx, tt.eventID, tt.callerID, tt.search, tt.params)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2641,7 +2677,7 @@ func TestEventService_RemoveEventTeamMember(t *testing.T) {
 			if tt.setupTeamRepo != nil {
 				tt.setupTeamRepo(teamRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeTagRepo(), teamRepo, newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			err := svc.RemoveEventTeamMember(ctx, tt.eventID, tt.userIDToRemove, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2729,7 +2765,7 @@ func TestEventService_AddEventTeamMemberByEmail(t *testing.T) {
 			if tt.setupUserRepo != nil {
 				tt.setupUserRepo(userRepo)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), teamRepo, userRepo, newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeTagRepo(), teamRepo, userRepo, newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
 			got, err := svc.AddEventTeamMemberByEmail(ctx, tt.eventID, tt.email, tt.ownerID)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -2875,7 +2911,7 @@ func TestEventService_SendEventInvitations(t *testing.T) {
 			if tt.setupEmail != nil {
 				tt.setupEmail(emailSvc)
 			}
-			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeEventTeamMemberRepo(), userRepo, invRepo, emailSvc, &fakeSessionizeFetcher{}, timeout)
+			svc := NewEventService(eventRepo, newFakeSessionRepo(), newFakeTagRepo(), newFakeEventTeamMemberRepo(), userRepo, invRepo, emailSvc, &fakeSessionizeFetcher{}, timeout)
 
 			sent, failed, err := svc.SendEventInvitations(ctx, tt.eventID, tt.ownerID, tt.emails)
 
@@ -3136,7 +3172,7 @@ func TestEventService_UpdateSessionSchedule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			got, err := svc.UpdateSessionSchedule(ctx, tt.args.eventID, tt.args.sessionID, tt.args.ownerID, tt.args.roomID, tt.args.startTime, tt.args.endTime)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -3306,7 +3342,7 @@ func TestEventService_UpdateSessionContent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
-			svc := NewEventService(eventRepo, sessionRepo, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
+			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
 			got, err := svc.UpdateSessionContent(ctx, tt.args.eventID, tt.args.sessionID, tt.args.ownerID, tt.args.title, tt.args.description)
 			if tt.wantErr {
 				require.Error(t, err)

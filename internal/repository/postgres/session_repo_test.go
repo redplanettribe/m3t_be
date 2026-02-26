@@ -120,9 +120,6 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				mock.ExpectQuery(`INSERT INTO sessions`).
 					WithArgs("room-1", "sess-1", "Talk 1", startTime, endTime, "A talk", createdAt, updatedAt).
 					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("session-uuid-1"))
-				mock.ExpectExec(`DELETE FROM session_tags WHERE session_id`).
-					WithArgs("session-uuid-1").
-					WillReturnResult(sqlmock.NewResult(0, 0))
 			},
 			wantID:  "session-uuid-1",
 			wantErr: false,
@@ -144,11 +141,6 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				mock.ExpectQuery(`INSERT INTO sessions`).
 					WithArgs("room-1", "sess-tags", "Talk with tags", startTime, endTime, "", createdAt, updatedAt).
 					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("session-uuid-2"))
-				mock.ExpectExec(`DELETE FROM session_tags WHERE session_id`).
-					WithArgs("session-uuid-2").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec(`INSERT INTO session_tags`).WithArgs("session-uuid-2", "ai").WillReturnResult(sqlmock.NewResult(0, 1))
-				mock.ExpectExec(`INSERT INTO session_tags`).WithArgs("session-uuid-2", "web").WillReturnResult(sqlmock.NewResult(0, 1))
 			},
 			wantID:  "session-uuid-2",
 			wantErr: false,
@@ -714,10 +706,10 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 				mock.ExpectQuery(`SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at`).
 					WithArgs("ev-1").
 					WillReturnRows(rows)
-				tagRows := sqlmock.NewRows([]string{"session_id", "tag"}).
+				tagRows := sqlmock.NewRows([]string{"session_id", "name"}).
 					AddRow("sess-1", "ai").
 					AddRow("sess-1", "web")
-				mock.ExpectQuery(`SELECT session_id, tag FROM session_tags WHERE session_id = ANY`).
+				mock.ExpectQuery(`SELECT st.session_id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY`).
 					WithArgs(pq.Array([]string{"sess-1"})).
 					WillReturnRows(tagRows)
 			},
@@ -800,9 +792,9 @@ func TestSessionRepository_UpdateSessionContent(t *testing.T) {
 				mock.ExpectQuery(`UPDATE sessions`).
 					WithArgs("sess-1", "New Title", "New description").
 					WillReturnRows(rows)
-				mock.ExpectQuery(`SELECT tag FROM session_tags WHERE session_id`).
+				mock.ExpectQuery(`SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
 					WithArgs("sess-1").
-					WillReturnRows(sqlmock.NewRows([]string{"tag"}))
+					WillReturnRows(sqlmock.NewRows([]string{"name"}))
 			},
 			wantTitle: "New Title",
 			wantDesc:  "New description",
@@ -817,9 +809,9 @@ func TestSessionRepository_UpdateSessionContent(t *testing.T) {
 				mock.ExpectQuery(`UPDATE sessions`).
 					WithArgs("sess-1", "Only Title", nil).
 					WillReturnRows(rows)
-				mock.ExpectQuery(`SELECT tag FROM session_tags WHERE session_id`).
+				mock.ExpectQuery(`SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
 					WithArgs("sess-1").
-					WillReturnRows(sqlmock.NewRows([]string{"tag"}).AddRow("ai").AddRow("web"))
+					WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("ai").AddRow("web"))
 			},
 			wantTitle: "Only Title",
 			wantDesc:  "unchanged",
@@ -834,9 +826,9 @@ func TestSessionRepository_UpdateSessionContent(t *testing.T) {
 				mock.ExpectQuery(`UPDATE sessions`).
 					WithArgs("sess-1", nil, "Only description").
 					WillReturnRows(rows)
-				mock.ExpectQuery(`SELECT tag FROM session_tags WHERE session_id`).
+				mock.ExpectQuery(`SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
 					WithArgs("sess-1").
-					WillReturnRows(sqlmock.NewRows([]string{"tag"}))
+					WillReturnRows(sqlmock.NewRows([]string{"name"}))
 			},
 			wantTitle: "Old Title",
 			wantDesc:  "Only description",

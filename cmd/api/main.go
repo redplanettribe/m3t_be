@@ -55,6 +55,7 @@ func main() {
 	// 3. Init Layers
 	eventRepo := postgres.NewEventRepository(db)
 	sessionRepo := postgres.NewSessionRepository(db)
+	tagRepo := postgres.NewTagRepository(db)
 	eventTeamMemberRepo := postgres.NewEventTeamMemberRepository(db)
 	eventInvitationRepo := postgres.NewEventInvitationRepository(db)
 	eventRegistrationRepo := postgres.NewEventRegistrationRepository(db)
@@ -82,7 +83,7 @@ func main() {
 	templateRenderer := email.NewTemplateRenderer()
 	emailService := services.NewEmailService(mailer, templateRenderer)
 
-	manageScheduleService := services.NewEventService(eventRepo, sessionRepo, eventTeamMemberRepo, userRepo, eventInvitationRepo, emailService, sessionizeFetcher, 10*time.Second)
+	manageScheduleService := services.NewEventService(eventRepo, sessionRepo, tagRepo, eventTeamMemberRepo, userRepo, eventInvitationRepo, emailService, sessionizeFetcher, 10*time.Second)
 	scheduleController := controllers.NewScheduleController(logger, manageScheduleService)
 	attendeeService := services.NewAttendeeService(eventRepo, eventRegistrationRepo, sessionRepo)
 	attendeeController := controllers.NewAttendeeController(logger, attendeeService)

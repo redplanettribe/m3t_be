@@ -53,13 +53,30 @@ Table sessions {
   }
 }
 
+Table tags {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(255) [not null, unique]
+}
+
 Table session_tags {
   session_id uuid [not null, ref: > sessions.id]
-  tag varchar(255) [not null]
+  tag_id uuid [not null, ref: > tags.id]
 
   indexes {
-    (session_id, tag) [pk]
+    (session_id, tag_id) [pk]
     session_id
+    tag_id
+  }
+}
+
+Table event_tags {
+  event_id uuid [not null, ref: > events.id]
+  tag_id uuid [not null, ref: > tags.id]
+
+  indexes {
+    (event_id, tag_id) [pk]
+    event_id
+    tag_id
   }
 }
 
