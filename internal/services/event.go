@@ -664,7 +664,7 @@ func (s *eventService) GetEventRoom(ctx context.Context, eventID, roomID, ownerI
 	return room, nil
 }
 
-func (s *eventService) UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*domain.Room, error) {
+func (s *eventService) UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, name *string, capacity int, description, howToGetThere string, notBookable *bool) (*domain.Room, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -688,11 +688,15 @@ func (s *eventService) UpdateEventRoom(ctx context.Context, eventID, roomID, own
 	if room.EventID != eventID {
 		return nil, domain.ErrNotFound
 	}
+	finalName := room.Name
+	if name != nil {
+		finalName = *name
+	}
 	finalNotBookable := room.NotBookable
 	if notBookable != nil {
 		finalNotBookable = *notBookable
 	}
-	updated, err := s.sessionRepo.UpdateRoomDetails(ctx, roomID, capacity, description, howToGetThere, finalNotBookable)
+	updated, err := s.sessionRepo.UpdateRoomDetails(ctx, roomID, finalName, capacity, description, howToGetThere, finalNotBookable)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return nil, domain.ErrNotFound

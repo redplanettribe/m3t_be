@@ -53,7 +53,7 @@ type EventService interface {
 	ToggleRoomNotBookable(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
 	ListEventRooms(ctx context.Context, eventID, ownerID string) ([]*Room, error)
 	GetEventRoom(ctx context.Context, eventID, roomID, ownerID string) (*Room, error)
-	UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*Room, error)
+	UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, name *string, capacity int, description, howToGetThere string, notBookable *bool) (*Room, error)
 	DeleteEventRoom(ctx context.Context, eventID, roomID, ownerID string) error
 	DeleteEventSession(ctx context.Context, eventID, sessionID, ownerID string) error
 	ListEventSpeakers(ctx context.Context, eventID, ownerID string) ([]*Speaker, error)

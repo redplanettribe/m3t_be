@@ -154,7 +154,7 @@ func (m *mockSessionRepository) DeleteSpeaker(ctx context.Context, speakerID str
 func (m *mockSessionRepository) SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*domain.Room, error) {
 	return nil, nil
 }
-func (m *mockSessionRepository) UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
+func (m *mockSessionRepository) UpdateRoomDetails(ctx context.Context, roomID string, name string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
 	return nil, nil
 }
 func (m *mockSessionRepository) DeleteRoom(ctx context.Context, roomID string) error { return nil }

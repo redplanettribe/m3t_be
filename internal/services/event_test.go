@@ -247,12 +247,13 @@ func (f *fakeSessionRepo) SetRoomNotBookable(ctx context.Context, roomID string,
 	return nil, domain.ErrNotFound
 }
 
-func (f *fakeSessionRepo) UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
+func (f *fakeSessionRepo) UpdateRoomDetails(ctx context.Context, roomID string, name string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
 	if f.updateRoomDetailsErr != nil {
 		return nil, f.updateRoomDetailsErr
 	}
 	for _, r := range f.rooms {
 		if r.ID == roomID {
+			r.Name = name
 			r.Capacity = capacity
 			r.Description = description
 			r.HowToGetThere = howToGetThere
@@ -1791,6 +1792,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 		eventID       string
 		roomID        string
 		ownerID       string
+		roomName      *string
 		capacity      int
 		description   string
 		howToGetThere string
@@ -1812,12 +1814,14 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 			eventID:       "ev-1",
 			roomID:        "room-1",
 			ownerID:       "user-1",
+			roomName:      ptrString("Main Hall"),
 			capacity:      100,
 			description:   "Big room",
 			howToGetThere: "Second floor",
 			notBookable:   ptrBool(true),
 			assert: func(t *testing.T, room *domain.Room) {
 				require.NotNil(t, room)
+				assert.Equal(t, "Main Hall", room.Name)
 				assert.Equal(t, 100, room.Capacity)
 				assert.Equal(t, "Big room", room.Description)
 				assert.Equal(t, "Second floor", room.HowToGetThere)
@@ -1836,6 +1840,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 			eventID:       "ev-1",
 			roomID:        "room-1",
 			ownerID:       "user-1",
+			roomName:      nil,
 			capacity:      50,
 			description:   "",
 			howToGetThere: "",
@@ -1843,7 +1848,32 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 			assert: func(t *testing.T, room *domain.Room) {
 				require.NotNil(t, room)
 				assert.True(t, room.NotBookable, "should keep existing true when notBookable is nil")
+				assert.Equal(t, "Room A", room.Name, "should keep existing name when name is nil")
 				assert.Equal(t, 50, room.Capacity)
+			},
+		},
+		{
+			name: "success name nil keeps existing",
+			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A", NotBookable: false}}
+				return er, sr, &fakeSessionizeFetcher{}
+			},
+			eventID:       "ev-1",
+			roomID:        "room-1",
+			ownerID:       "user-1",
+			roomName:      nil,
+			capacity:      30,
+			description:   "Updated desc",
+			howToGetThere: "",
+			notBookable:   ptrBool(false),
+			assert: func(t *testing.T, room *domain.Room) {
+				require.NotNil(t, room)
+				assert.Equal(t, "Room A", room.Name)
+				assert.Equal(t, 30, room.Capacity)
+				assert.Equal(t, "Updated desc", room.Description)
 			},
 		},
 		{
@@ -1880,7 +1910,7 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
 			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
-			room, err := svc.UpdateEventRoom(ctx, tt.eventID, tt.roomID, tt.ownerID, tt.capacity, tt.description, tt.howToGetThere, tt.notBookable)
+			room, err := svc.UpdateEventRoom(ctx, tt.eventID, tt.roomID, tt.ownerID, tt.roomName, tt.capacity, tt.description, tt.howToGetThere, tt.notBookable)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.wantNotFound {
@@ -1900,6 +1930,8 @@ func TestEventService_UpdateEventRoom(t *testing.T) {
 }
 
 func ptrBool(b bool) *bool { return &b }
+
+func ptrString(s string) *string { return &s }
 
 func TestEventService_DeleteEventRoom(t *testing.T) {
 	ctx := context.Background()

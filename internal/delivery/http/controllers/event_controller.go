@@ -429,10 +429,11 @@ func (c *ScheduleController) CreateEventRoom(w http.ResponseWriter, r *http.Requ
 
 // UpdateRoomRequest is the request body for PATCH /events/{eventID}/rooms/{roomID}.
 type UpdateRoomRequest struct {
-	Capacity      int    `json:"capacity"`
-	Description   string `json:"description"`
-	HowToGetThere string `json:"how_to_get_there"`
-	NotBookable   *bool  `json:"not_bookable"`
+	Name          *string `json:"name"`
+	Capacity      int     `json:"capacity"`
+	Description   string  `json:"description"`
+	HowToGetThere string  `json:"how_to_get_there"`
+	NotBookable   *bool   `json:"not_bookable"`
 }
 
 // Validate implements Validator.
@@ -608,7 +609,7 @@ func (c *ScheduleController) GetEventRoom(w http.ResponseWriter, r *http.Request
 
 // UpdateEventRoom godoc
 // @Summary Update a room
-// @Description Updates room details (capacity, description, how_to_get_there, not_bookable). Only the event owner can update. Optional fields omitted from body are unchanged (not_bookable keeps current value when omitted). Requires authentication.
+// @Description Updates room details (name, capacity, description, how_to_get_there, not_bookable). Only the event owner can update. Optional fields omitted from body are unchanged (name and not_bookable keep current value when omitted). Requires authentication.
 // @Tags events
 // @Accept json
 // @Produce json
@@ -639,7 +640,7 @@ func (c *ScheduleController) UpdateEventRoom(w http.ResponseWriter, r *http.Requ
 		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
-	room, err := c.Service.UpdateEventRoom(r.Context(), eventID, roomID, ownerID, req.Capacity, req.Description, req.HowToGetThere, req.NotBookable)
+	room, err := c.Service.UpdateEventRoom(r.Context(), eventID, roomID, ownerID, req.Name, req.Capacity, req.Description, req.HowToGetThere, req.NotBookable)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or room not found")

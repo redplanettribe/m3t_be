@@ -1118,7 +1118,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Updates room details (capacity, description, how_to_get_there, not_bookable). Only the event owner can update. Optional fields omitted from body are unchanged (not_bookable keeps current value when omitted). Requires authentication.",
+                "description": "Updates room details (name, capacity, description, how_to_get_there, not_bookable). Only the event owner can update. Optional fields omitted from body are unchanged (name and not_bookable keep current value when omitted). Requires authentication.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3217,6 +3217,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "how_to_get_there": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 },
                 "not_bookable": {

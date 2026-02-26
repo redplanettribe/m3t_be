@@ -131,15 +131,15 @@ func (r *SessionRepository) SetRoomNotBookable(ctx context.Context, roomID strin
 	return room, nil
 }
 
-func (r *SessionRepository) UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
+func (r *SessionRepository) UpdateRoomDetails(ctx context.Context, roomID string, name string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
 	query := `
 		UPDATE rooms
-		SET capacity = $2, description = $3, how_to_get_there = $4, not_bookable = $5, updated_at = NOW()
+		SET name = $2, capacity = $3, description = $4, how_to_get_there = $5, not_bookable = $6, updated_at = NOW()
 		WHERE id = $1
 		RETURNING id, event_id, name, source_session_id, source, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 	`
 	room := &domain.Room{}
-	err := r.DB.QueryRowContext(ctx, query, roomID, capacity, description, howToGetThere, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SourceSessionID, &room.Source, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, roomID, name, capacity, description, howToGetThere, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SourceSessionID, &room.Source, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound

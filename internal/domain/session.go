@@ -103,7 +103,7 @@ type SessionRepository interface {
 	ListSessionsByIDs(ctx context.Context, sessionIDs []string) ([]*Session, error)
 	DeleteSpeaker(ctx context.Context, speakerID string) error
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
-	UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
+	UpdateRoomDetails(ctx context.Context, roomID string, name string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
 	DeleteRoom(ctx context.Context, roomID string) error
 	DeleteSession(ctx context.Context, sessionID string) error
 	UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*Session, error)

@@ -90,6 +90,7 @@ type fakeEventService struct {
 	lastUpdateEventRoomEventID string
 	lastUpdateEventRoomRoomID  string
 	lastUpdateEventRoomOwnerID string
+	lastUpdateEventRoomName    *string
 	lastDeleteEventRoomEventID string
 	lastDeleteEventRoomRoomID  string
 	lastDeleteEventRoomOwnerID string
@@ -271,10 +272,11 @@ func (f *fakeEventService) GetEventRoom(ctx context.Context, eventID, roomID, ow
 	return f.getEventRoomResult, nil
 }
 
-func (f *fakeEventService) UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*domain.Room, error) {
+func (f *fakeEventService) UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, name *string, capacity int, description, howToGetThere string, notBookable *bool) (*domain.Room, error) {
 	f.lastUpdateEventRoomEventID = eventID
 	f.lastUpdateEventRoomRoomID = roomID
 	f.lastUpdateEventRoomOwnerID = ownerID
+	f.lastUpdateEventRoomName = name
 	if f.updateEventRoomErr != nil {
 		return nil, f.updateEventRoomErr
 	}
@@ -1237,6 +1239,22 @@ func TestScheduleController_UpdateEventRoom(t *testing.T) {
 				assert.Equal(t, "ev-1", fake.lastUpdateEventRoomEventID)
 				assert.Equal(t, "room-1", fake.lastUpdateEventRoomRoomID)
 				assert.Equal(t, "user-123", fake.lastUpdateEventRoomOwnerID)
+				assert.Nil(t, fake.lastUpdateEventRoomName)
+			},
+		},
+		{
+			name:       "success with name",
+			eventID:    "ev-1",
+			roomID:     "room-1",
+			body:       `{"name":"Main Hall","capacity":50,"description":"Big room","how_to_get_there":"Floor 2","not_bookable":true}`,
+			fakeResult: &domain.Room{ID: "room-1", EventID: "ev-1", Name: "Main Hall", Capacity: 50, Description: "Big room", HowToGetThere: "Floor 2", NotBookable: true},
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastUpdateEventRoomEventID)
+				assert.Equal(t, "room-1", fake.lastUpdateEventRoomRoomID)
+				assert.Equal(t, "user-123", fake.lastUpdateEventRoomOwnerID)
+				require.NotNil(t, fake.lastUpdateEventRoomName)
+				assert.Equal(t, "Main Hall", *fake.lastUpdateEventRoomName)
 			},
 		},
 		{
