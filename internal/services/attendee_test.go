@@ -136,6 +136,21 @@ func (m *mockSessionRepository) ListSessionsByEventID(ctx context.Context, event
 func (m *mockSessionRepository) ListSpeakerIDsBySessionIDs(ctx context.Context, sessionIDs []string) (map[string][]string, error) {
 	return nil, nil
 }
+func (m *mockSessionRepository) GetSpeakerByID(ctx context.Context, speakerID string) (*domain.Speaker, error) {
+	return nil, domain.ErrNotFound
+}
+func (m *mockSessionRepository) ListSpeakersByEventID(ctx context.Context, eventID string) ([]*domain.Speaker, error) {
+	return nil, nil
+}
+func (m *mockSessionRepository) ListSessionIDsBySpeakerID(ctx context.Context, speakerID string) ([]string, error) {
+	return nil, nil
+}
+func (m *mockSessionRepository) ListSessionsByIDs(ctx context.Context, sessionIDs []string) ([]*domain.Session, error) {
+	return nil, nil
+}
+func (m *mockSessionRepository) DeleteSpeaker(ctx context.Context, speakerID string) error {
+	return nil
+}
 func (m *mockSessionRepository) SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*domain.Room, error) {
 	return nil, nil
 }

@@ -24,6 +24,30 @@ definitions:
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
+  controllers.CreateSpeakerRequest:
+    properties:
+      bio:
+        type: string
+      first_name:
+        type: string
+      full_name:
+        type: string
+      is_top_speaker:
+        type: boolean
+      last_name:
+        type: string
+      profile_picture:
+        type: string
+      tag_line:
+        type: string
+    type: object
+  controllers.CreateSpeakerSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Speaker'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.DeleteEventResponse:
     properties:
       status:
@@ -67,6 +91,22 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/domain.EventSchedule'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.GetEventSpeakerResponse:
+    properties:
+      sessions:
+        items:
+          $ref: '#/definitions/domain.Session'
+        type: array
+      speaker:
+        $ref: '#/definitions/domain.Speaker'
+    type: object
+  controllers.GetEventSpeakerSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/controllers.GetEventSpeakerResponse'
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
@@ -151,6 +191,15 @@ definitions:
       data:
         items:
           $ref: '#/definitions/domain.Room'
+        type: array
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.ListSpeakersSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/domain.Speaker'
         type: array
       error:
         $ref: '#/definitions/helpers.APIError'
@@ -441,6 +490,33 @@ definitions:
           type: string
         type: array
       title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.Speaker:
+    properties:
+      bio:
+        type: string
+      created_at:
+        type: string
+      event_id:
+        type: string
+      first_name:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      is_top_speaker:
+        type: boolean
+      last_name:
+        type: string
+      profile_picture:
+        type: string
+      sessionize_speaker_id:
+        type: string
+      tag_line:
         type: string
       updated_at:
         type: string
@@ -1403,6 +1479,188 @@ paths:
       security:
       - BearerAuth: []
       summary: Update session content
+      tags:
+      - events
+  /events/{eventID}/speakers:
+    get:
+      description: Returns the list of speakers for the event. Only the event owner
+        can list. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data is an array of speakers
+          schema:
+            $ref: '#/definitions/controllers.ListSpeakersSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: List speakers for an event
+      tags:
+      - events
+    post:
+      consumes:
+      - application/json
+      description: Creates a new speaker for the event (manual create). Only the event
+        owner can create. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Speaker data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.CreateSpeakerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: data contains the created speaker
+          schema:
+            $ref: '#/definitions/controllers.CreateSpeakerSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a speaker
+      tags:
+      - events
+  /events/{eventID}/speakers/{speakerID}:
+    delete:
+      description: Deletes a speaker. Session-speaker links are removed by cascade.
+        Only the event owner can delete. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Speaker ID (UUID)
+        in: path
+        name: speakerID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a speaker
+      tags:
+      - events
+    get:
+      description: Returns a single speaker for the event with the list of sessions
+        they speak in. Only the event owner can access. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Speaker ID (UUID)
+        in: path
+        name: speakerID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains speaker and sessions
+          schema:
+            $ref: '#/definitions/controllers.GetEventSpeakerSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a speaker by ID
       tags:
       - events
   /events/{eventID}/team-members:

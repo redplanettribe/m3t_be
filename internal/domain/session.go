@@ -85,6 +85,11 @@ type SessionRepository interface {
 	ListRoomsByEventID(ctx context.Context, eventID string) ([]*Room, error)
 	ListSessionsByEventID(ctx context.Context, eventID string) ([]*Session, error)
 	ListSpeakerIDsBySessionIDs(ctx context.Context, sessionIDs []string) (map[string][]string, error)
+	GetSpeakerByID(ctx context.Context, speakerID string) (*Speaker, error)
+	ListSpeakersByEventID(ctx context.Context, eventID string) ([]*Speaker, error)
+	ListSessionIDsBySpeakerID(ctx context.Context, speakerID string) ([]string, error)
+	ListSessionsByIDs(ctx context.Context, sessionIDs []string) ([]*Session, error)
+	DeleteSpeaker(ctx context.Context, speakerID string) error
 	SetRoomNotBookable(ctx context.Context, roomID string, notBookable bool) (*Room, error)
 	UpdateRoomDetails(ctx context.Context, roomID string, capacity int, description, howToGetThere string, notBookable bool) (*Room, error)
 	DeleteRoom(ctx context.Context, roomID string) error

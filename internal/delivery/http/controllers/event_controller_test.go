@@ -109,6 +109,28 @@ type fakeEventService struct {
 	updateEventResult       *domain.Event
 	lastUpdateEventID       string
 	lastUpdateEventOwnerID  string
+	// Speakers
+	listEventSpeakersErr    error
+	listEventSpeakersResult []*domain.Speaker
+	getEventSpeakerErr      error
+	getEventSpeakerResult  *domain.Speaker
+	getEventSpeakerSessions []*domain.Session
+	deleteEventSpeakerErr   error
+	createEventSpeakerErr   error
+	createEventSpeakerResult *domain.Speaker
+	lastListEventSpeakersEventID  string
+	lastListEventSpeakersOwnerID  string
+	lastGetEventSpeakerEventID    string
+	lastGetEventSpeakerSpeakerID  string
+	lastGetEventSpeakerOwnerID    string
+	lastDeleteEventSpeakerEventID string
+	lastDeleteEventSpeakerSpeakerID string
+	lastDeleteEventSpeakerOwnerID string
+	lastCreateEventSpeakerEventID string
+	lastCreateEventSpeakerOwnerID string
+	lastCreateEventSpeakerFirstName  string
+	lastCreateEventSpeakerLastName   string
+	lastCreateEventSpeakerFullName   string
 }
 
 func (f *fakeEventService) CreateEvent(ctx context.Context, event *domain.Event) error {
@@ -294,6 +316,57 @@ func (f *fakeEventService) ListEventInvitations(ctx context.Context, eventID, ca
 		return f.listEventInvitationsResult, f.listEventInvitationsTotal, nil
 	}
 	return []*domain.EventInvitation{}, 0, nil
+}
+
+func (f *fakeEventService) ListEventSpeakers(ctx context.Context, eventID, ownerID string) ([]*domain.Speaker, error) {
+	f.lastListEventSpeakersEventID = eventID
+	f.lastListEventSpeakersOwnerID = ownerID
+	if f.listEventSpeakersErr != nil {
+		return nil, f.listEventSpeakersErr
+	}
+	if f.listEventSpeakersResult != nil {
+		return f.listEventSpeakersResult, nil
+	}
+	return []*domain.Speaker{}, nil
+}
+
+func (f *fakeEventService) GetEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) (*domain.Speaker, []*domain.Session, error) {
+	f.lastGetEventSpeakerEventID = eventID
+	f.lastGetEventSpeakerSpeakerID = speakerID
+	f.lastGetEventSpeakerOwnerID = ownerID
+	if f.getEventSpeakerErr != nil {
+		return nil, nil, f.getEventSpeakerErr
+	}
+	if f.getEventSpeakerResult != nil {
+		sessions := f.getEventSpeakerSessions
+		if sessions == nil {
+			sessions = []*domain.Session{}
+		}
+		return f.getEventSpeakerResult, sessions, nil
+	}
+	return nil, nil, domain.ErrNotFound
+}
+
+func (f *fakeEventService) DeleteEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) error {
+	f.lastDeleteEventSpeakerEventID = eventID
+	f.lastDeleteEventSpeakerSpeakerID = speakerID
+	f.lastDeleteEventSpeakerOwnerID = ownerID
+	return f.deleteEventSpeakerErr
+}
+
+func (f *fakeEventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*domain.Speaker, error) {
+	f.lastCreateEventSpeakerEventID = eventID
+	f.lastCreateEventSpeakerOwnerID = ownerID
+	f.lastCreateEventSpeakerFirstName = firstName
+	f.lastCreateEventSpeakerLastName = lastName
+	f.lastCreateEventSpeakerFullName = fullName
+	if f.createEventSpeakerErr != nil {
+		return nil, f.createEventSpeakerErr
+	}
+	if f.createEventSpeakerResult != nil {
+		return f.createEventSpeakerResult, nil
+	}
+	return &domain.Speaker{ID: "sp-created", EventID: eventID, FirstName: firstName, LastName: lastName, FullName: fullName}, nil
 }
 
 func TestScheduleController_CreateEvent(t *testing.T) {
@@ -1163,6 +1236,380 @@ func TestScheduleController_DeleteEventRoom(t *testing.T) {
 				dataBytes, _ := json.Marshal(envelope.Data)
 				require.NoError(t, json.Unmarshal(dataBytes, &data))
 				assert.Equal(t, "deleted", data.Status)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_ListEventSpeakers(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		noUserContext  bool
+		fakeErr        error
+		fakeResult     []*domain.Speaker
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			fakeResult: []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}},
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastListEventSpeakersEventID)
+				assert.Equal(t, "user-123", fake.lastListEventSpeakersOwnerID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{listEventSpeakersErr: tt.fakeErr, listEventSpeakersResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/speakers"
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.ListEventSpeakers(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				require.Nil(t, envelope.Error)
+				tt.checkCall(t, fake)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_GetEventSpeaker(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		speakerID      string
+		noUserContext  bool
+		fakeErr        error
+		fakeSpeaker    *domain.Speaker
+		fakeSessions   []*domain.Session
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:        "success",
+			eventID:     "ev-1",
+			speakerID:   "sp-1",
+			fakeSpeaker: &domain.Speaker{ID: "sp-1", EventID: "ev-1", FullName: "Alice"},
+			fakeSessions: []*domain.Session{{ID: "sess-1", Title: "Talk"}},
+			wantStatus:  http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastGetEventSpeakerEventID)
+				assert.Equal(t, "sp-1", fake.lastGetEventSpeakerSpeakerID)
+				assert.Equal(t, "user-123", fake.lastGetEventSpeakerOwnerID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			speakerID:      "sp-1",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or speakerID",
+		},
+		{
+			name:           "missing speakerID",
+			eventID:        "ev-1",
+			speakerID:      "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or speakerID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			speakerID:      "sp-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			speakerID:      "sp-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event or speaker not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			speakerID:      "sp-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{
+				getEventSpeakerErr:      tt.fakeErr,
+				getEventSpeakerResult:  tt.fakeSpeaker,
+				getEventSpeakerSessions: tt.fakeSessions,
+			}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/speakers/" + tt.speakerID
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if tt.speakerID != "" {
+				req.SetPathValue("speakerID", tt.speakerID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.GetEventSpeaker(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				require.Nil(t, envelope.Error)
+				tt.checkCall(t, fake)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_DeleteEventSpeaker(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		speakerID      string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success returns 204",
+			eventID:    "ev-1",
+			speakerID:  "sp-1",
+			wantStatus: http.StatusNoContent,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastDeleteEventSpeakerEventID)
+				assert.Equal(t, "sp-1", fake.lastDeleteEventSpeakerSpeakerID)
+				assert.Equal(t, "user-123", fake.lastDeleteEventSpeakerOwnerID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			speakerID:      "sp-1",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or speakerID",
+		},
+		{
+			name:           "missing speakerID",
+			eventID:        "ev-1",
+			speakerID:      "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or speakerID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			speakerID:      "sp-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			speakerID:      "sp-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event or speaker not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			speakerID:      "sp-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{deleteEventSpeakerErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/speakers/" + tt.speakerID
+			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if tt.speakerID != "" {
+				req.SetPathValue("speakerID", tt.speakerID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.DeleteEventSpeaker(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantStatus == http.StatusNoContent {
+				assert.Empty(t, rr.Body.Bytes())
+				if tt.checkCall != nil {
+					tt.checkCall(t, fake)
+				}
+				return
+			}
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.checkCall != nil {
+				tt.checkCall(t, fake)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_CreateEventSpeaker(t *testing.T) {
+	tests := []struct {
+		name           string
+		body           string
+		eventID        string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			body:       `{"first_name":"Jane","last_name":"Doe","full_name":"Jane Doe","bio":"Bio","is_top_speaker":true}`,
+			wantStatus: http.StatusCreated,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastCreateEventSpeakerEventID)
+				assert.Equal(t, "user-123", fake.lastCreateEventSpeakerOwnerID)
+				assert.Equal(t, "Jane", fake.lastCreateEventSpeakerFirstName)
+				assert.Equal(t, "Doe", fake.lastCreateEventSpeakerLastName)
+				assert.Equal(t, "Jane Doe", fake.lastCreateEventSpeakerFullName)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			body:           `{"full_name":"Alice"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			body:           `{"full_name":"Alice"}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "validation missing name",
+			eventID:        "ev-1",
+			body:           `{}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "at least one of full_name, first_name, or last_name is required",
+		},
+		{
+			name:           "invalid json",
+			eventID:        "ev-1",
+			body:           `{invalid`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "invalid",
+		},
+		{
+			name:           "not found",
+			eventID:        "ev-missing",
+			body:           `{"full_name":"Alice"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "event not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			body:           `{"full_name":"Alice"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{createEventSpeakerErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/speakers"
+			req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.CreateEventSpeaker(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusCreated && tt.checkCall != nil {
+				require.Nil(t, envelope.Error)
+				tt.checkCall(t, fake)
 			}
 			if tt.wantBodySubstr != "" && envelope.Error != nil {
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)

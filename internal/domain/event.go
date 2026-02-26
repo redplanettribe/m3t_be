@@ -54,6 +54,10 @@ type EventService interface {
 	UpdateEventRoom(ctx context.Context, eventID, roomID, ownerID string, capacity int, description, howToGetThere string, notBookable *bool) (*Room, error)
 	DeleteEventRoom(ctx context.Context, eventID, roomID, ownerID string) error
 	DeleteEventSession(ctx context.Context, eventID, sessionID, ownerID string) error
+	ListEventSpeakers(ctx context.Context, eventID, ownerID string) ([]*Speaker, error)
+	GetEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) (*Speaker, []*Session, error)
+	DeleteEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) error
+	CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*Speaker, error)
 	AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error
 	AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*EventTeamMember, error)
 	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)

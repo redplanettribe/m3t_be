@@ -395,6 +395,50 @@ type DeleteRoomSuccessResponse struct {
 	Error *helpers.APIError   `json:"error"`
 }
 
+// CreateSpeakerRequest is the request body for POST /events/{eventID}/speakers.
+type CreateSpeakerRequest struct {
+	FirstName      string `json:"first_name"`
+	LastName       string `json:"last_name"`
+	FullName       string `json:"full_name"`
+	Bio            string `json:"bio"`
+	TagLine        string `json:"tag_line"`
+	ProfilePicture string `json:"profile_picture"`
+	IsTopSpeaker   bool   `json:"is_top_speaker"`
+}
+
+// Validate implements Validator. At least one of full_name or (first_name or last_name) must be non-empty.
+func (c CreateSpeakerRequest) Validate() []string {
+	hasName := strings.TrimSpace(c.FullName) != "" || strings.TrimSpace(c.FirstName) != "" || strings.TrimSpace(c.LastName) != ""
+	if !hasName {
+		return []string{"at least one of full_name, first_name, or last_name is required"}
+	}
+	return nil
+}
+
+// GetEventSpeakerResponse is the data payload for GET /events/{eventID}/speakers/{speakerID} (200).
+type GetEventSpeakerResponse struct {
+	Speaker  *domain.Speaker   `json:"speaker"`
+	Sessions []*domain.Session `json:"sessions"`
+}
+
+// ListSpeakersSuccessResponse is the success response envelope for GET /events/{eventID}/speakers (200).
+type ListSpeakersSuccessResponse struct {
+	Data  []*domain.Speaker   `json:"data"`
+	Error *helpers.APIError   `json:"error"`
+}
+
+// GetEventSpeakerSuccessResponse is the success response envelope for GET /events/{eventID}/speakers/{speakerID} (200).
+type GetEventSpeakerSuccessResponse struct {
+	Data  GetEventSpeakerResponse `json:"data"`
+	Error *helpers.APIError       `json:"error"`
+}
+
+// CreateSpeakerSuccessResponse is the success response envelope for POST /events/{eventID}/speakers (201).
+type CreateSpeakerSuccessResponse struct {
+	Data  *domain.Speaker    `json:"data"`
+	Error *helpers.APIError  `json:"error"`
+}
+
 // ListEventRooms godoc
 // @Summary List rooms for an event
 // @Description Returns the list of rooms for the event. Only the event owner can list. Requires authentication.
@@ -575,6 +619,189 @@ func (c *ScheduleController) DeleteEventRoom(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	helpers.WriteJSONSuccess(w, http.StatusOK, DeleteEventResponse{Status: "deleted"})
+}
+
+// ListEventSpeakers godoc
+// @Summary List speakers for an event
+// @Description Returns the list of speakers for the event. Only the event owner can list. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Success 200 {object} controllers.ListSpeakersSuccessResponse "data is an array of speakers"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/speakers [get]
+func (c *ScheduleController) ListEventSpeakers(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	speakers, err := c.Service.ListEventSpeakers(r.Context(), eventID, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if speakers == nil {
+		speakers = []*domain.Speaker{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, speakers)
+}
+
+// GetEventSpeaker godoc
+// @Summary Get a speaker by ID
+// @Description Returns a single speaker for the event with the list of sessions they speak in. Only the event owner can access. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param speakerID path string true "Speaker ID (UUID)"
+// @Success 200 {object} controllers.GetEventSpeakerSuccessResponse "data contains speaker and sessions"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/speakers/{speakerID} [get]
+func (c *ScheduleController) GetEventSpeaker(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	speakerID := r.PathValue("speakerID")
+	if eventID == "" || speakerID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or speakerID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	speaker, sessions, err := c.Service.GetEventSpeaker(r.Context(), eventID, speakerID, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or speaker not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if sessions == nil {
+		sessions = []*domain.Session{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, GetEventSpeakerResponse{Speaker: speaker, Sessions: sessions})
+}
+
+// DeleteEventSpeaker godoc
+// @Summary Delete a speaker
+// @Description Deletes a speaker. Session-speaker links are removed by cascade. Only the event owner can delete. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param speakerID path string true "Speaker ID (UUID)"
+// @Success 204 "No content"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/speakers/{speakerID} [delete]
+func (c *ScheduleController) DeleteEventSpeaker(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	speakerID := r.PathValue("speakerID")
+	if eventID == "" || speakerID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or speakerID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	if err := c.Service.DeleteEventSpeaker(r.Context(), eventID, speakerID, ownerID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or speaker not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// CreateEventSpeaker godoc
+// @Summary Create a speaker
+// @Description Creates a new speaker for the event (manual create). Only the event owner can create. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body CreateSpeakerRequest true "Speaker data"
+// @Success 201 {object} controllers.CreateSpeakerSuccessResponse "data contains the created speaker"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/speakers [post]
+func (c *ScheduleController) CreateEventSpeaker(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	var req CreateSpeakerRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	speaker, err := c.Service.CreateEventSpeaker(r.Context(), eventID, ownerID, req.FirstName, req.LastName, req.FullName, req.Bio, req.TagLine, req.ProfilePicture, req.IsTopSpeaker)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusCreated, speaker)
 }
 
 // ListMyEvents godoc

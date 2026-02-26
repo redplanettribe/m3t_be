@@ -316,6 +316,147 @@ func (r *SessionRepository) ListSpeakerIDsBySessionIDs(ctx context.Context, sess
 	return out, nil
 }
 
+func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string) (*domain.Speaker, error) {
+	query := `
+		SELECT id, event_id, sessionize_speaker_id, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
+		FROM speakers
+		WHERE id = $1
+	`
+	sp := &domain.Speaker{}
+	err := r.DB.QueryRowContext(ctx, query, speakerID).Scan(
+		&sp.ID,
+		&sp.EventID,
+		&sp.SessionizeSpeakerID,
+		&sp.FirstName,
+		&sp.LastName,
+		&sp.FullName,
+		&sp.Bio,
+		&sp.TagLine,
+		&sp.ProfilePicture,
+		&sp.IsTopSpeaker,
+		&sp.CreatedAt,
+		&sp.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return sp, nil
+}
+
+func (r *SessionRepository) ListSpeakersByEventID(ctx context.Context, eventID string) ([]*domain.Speaker, error) {
+	query := `
+		SELECT id, event_id, sessionize_speaker_id, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
+		FROM speakers
+		WHERE event_id = $1
+		ORDER BY full_name, id
+	`
+	rows, err := r.DB.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var speakers []*domain.Speaker
+	for rows.Next() {
+		sp := &domain.Speaker{}
+		if err := rows.Scan(&sp.ID, &sp.EventID, &sp.SessionizeSpeakerID, &sp.FirstName, &sp.LastName, &sp.FullName, &sp.Bio, &sp.TagLine, &sp.ProfilePicture, &sp.IsTopSpeaker, &sp.CreatedAt, &sp.UpdatedAt); err != nil {
+			return nil, err
+		}
+		speakers = append(speakers, sp)
+	}
+	return speakers, rows.Err()
+}
+
+func (r *SessionRepository) ListSessionIDsBySpeakerID(ctx context.Context, speakerID string) ([]string, error) {
+	rows, err := r.DB.QueryContext(ctx, `SELECT session_id FROM session_speakers WHERE speaker_id = $1 ORDER BY session_id`, speakerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *SessionRepository) ListSessionsByIDs(ctx context.Context, sessionIDs []string) ([]*domain.Session, error) {
+	if len(sessionIDs) == 0 {
+		return []*domain.Session{}, nil
+	}
+	query := `
+		SELECT id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+		FROM sessions
+		WHERE id = ANY($1)
+		ORDER BY start_time, id
+	`
+	rows, err := r.DB.QueryContext(ctx, query, pq.Array(sessionIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sessions []*domain.Session
+	for rows.Next() {
+		sess := &domain.Session{}
+		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
+			return nil, err
+		}
+		sess.Tags = []string{}
+		sess.SpeakerIDs = []string{}
+		sessions = append(sessions, sess)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	tagRows, err := r.DB.QueryContext(ctx, `SELECT session_id, tag FROM session_tags WHERE session_id = ANY($1)`, pq.Array(sessionIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer tagRows.Close()
+	tagsBySession := make(map[string][]string)
+	for tagRows.Next() {
+		var sessionID, tag string
+		if err := tagRows.Scan(&sessionID, &tag); err != nil {
+			return nil, err
+		}
+		tagsBySession[sessionID] = append(tagsBySession[sessionID], tag)
+	}
+	if err := tagRows.Err(); err != nil {
+		return nil, err
+	}
+	speakerMap, err := r.ListSpeakerIDsBySessionIDs(ctx, sessionIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, sess := range sessions {
+		if t := tagsBySession[sess.ID]; t != nil {
+			sess.Tags = t
+		}
+		if ids := speakerMap[sess.ID]; len(ids) > 0 {
+			sess.SpeakerIDs = ids
+		}
+	}
+	return sessions, nil
+}
+
+func (r *SessionRepository) DeleteSpeaker(ctx context.Context, speakerID string) error {
+	result, err := r.DB.ExecContext(ctx, `DELETE FROM speakers WHERE id = $1`, speakerID)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (r *SessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID string, roomID *string, startTime, endTime *time.Time) (*domain.Session, error) {
 	query := `
 		UPDATE sessions

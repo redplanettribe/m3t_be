@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -623,6 +624,138 @@ func (s *eventService) DeleteEventSession(ctx context.Context, eventID, sessionI
 		return fmt.Errorf("delete session: %w", err)
 	}
 	return nil
+}
+
+func (s *eventService) ListEventSpeakers(ctx context.Context, eventID, ownerID string) ([]*domain.Speaker, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	speakers, err := s.sessionRepo.ListSpeakersByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list speakers: %w", err)
+	}
+	if speakers == nil {
+		speakers = []*domain.Speaker{}
+	}
+	return speakers, nil
+}
+
+func (s *eventService) GetEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) (*domain.Speaker, []*domain.Session, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil, domain.ErrNotFound
+		}
+		return nil, nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, nil, domain.ErrForbidden
+	}
+	speaker, err := s.sessionRepo.GetSpeakerByID(ctx, speakerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil, domain.ErrNotFound
+		}
+		return nil, nil, fmt.Errorf("get speaker: %w", err)
+	}
+	if speaker.EventID != eventID {
+		return nil, nil, domain.ErrNotFound
+	}
+	sessionIDs, err := s.sessionRepo.ListSessionIDsBySpeakerID(ctx, speakerID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list session IDs by speaker: %w", err)
+	}
+	var sessions []*domain.Session
+	if len(sessionIDs) > 0 {
+		sessions, err = s.sessionRepo.ListSessionsByIDs(ctx, sessionIDs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("list sessions: %w", err)
+		}
+	}
+	return speaker, sessions, nil
+}
+
+func (s *eventService) DeleteEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	speaker, err := s.sessionRepo.GetSpeakerByID(ctx, speakerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get speaker: %w", err)
+	}
+	if speaker.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	if err := s.sessionRepo.DeleteSpeaker(ctx, speakerID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("delete speaker: %w", err)
+	}
+	return nil
+}
+
+func generateManualSpeakerID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "manual-" + hex.EncodeToString(b), nil
+}
+
+func (s *eventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*domain.Speaker, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	sessionizeSpeakerID, err := generateManualSpeakerID()
+	if err != nil {
+		return nil, fmt.Errorf("generate manual speaker id: %w", err)
+	}
+	if fullName == "" {
+		fullName = strings.TrimSpace(firstName + " " + lastName)
+	}
+	now := time.Now()
+	speaker := domain.NewSpeaker(eventID, sessionizeSpeakerID, firstName, lastName, fullName, bio, tagLine, profilePicture, isTopSpeaker, now, now)
+	if err := s.sessionRepo.CreateSpeaker(ctx, speaker); err != nil {
+		return nil, fmt.Errorf("create speaker: %w", err)
+	}
+	return speaker, nil
 }
 
 func (s *eventService) AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error {
