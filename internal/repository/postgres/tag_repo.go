@@ -3,7 +3,12 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+
 	"multitrackticketing/internal/domain"
+
+	"github.com/lib/pq"
 )
 
 type tagRepository struct {
@@ -68,4 +73,42 @@ func (r *tagRepository) SetSessionTags(ctx context.Context, sessionID string, ta
 		}
 	}
 	return nil
+}
+
+func (r *tagRepository) AddSessionTag(ctx context.Context, sessionID, tagID string) error {
+	_, err := r.DB.ExecContext(ctx, `INSERT INTO session_tags (session_id, tag_id) VALUES ($1, $2) ON CONFLICT (session_id, tag_id) DO NOTHING`, sessionID, tagID)
+	return err
+}
+
+func (r *tagRepository) RemoveSessionTag(ctx context.Context, sessionID, tagID string) error {
+	_, err := r.DB.ExecContext(ctx, `DELETE FROM session_tags WHERE session_id = $1 AND tag_id = $2`, sessionID, tagID)
+	return err
+}
+
+func (r *tagRepository) UpdateTagName(ctx context.Context, tagID, name string) error {
+	result, err := r.DB.ExecContext(ctx, `UPDATE tags SET name = $2 WHERE id = $1`, tagID, name)
+	if err != nil {
+		var perr *pq.Error
+		if errors.As(err, &perr) && perr.Code == "23505" {
+			return fmt.Errorf("tag name already exists: %s", name)
+		}
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *tagRepository) GetTagByID(ctx context.Context, tagID string) (*domain.Tag, error) {
+	var tag domain.Tag
+	err := r.DB.QueryRowContext(ctx, `SELECT id, name FROM tags WHERE id = $1`, tagID).Scan(&tag.ID, &tag.Name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return &tag, nil
 }

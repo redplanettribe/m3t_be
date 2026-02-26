@@ -67,6 +67,10 @@ type EventService interface {
 	SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error)
 	ListEventInvitations(ctx context.Context, eventID, callerID string, search string, params PaginationParams) ([]*EventInvitation, int, error)
 	ListEventTags(ctx context.Context, eventID, callerID string) ([]*Tag, error)
+	AddEventTags(ctx context.Context, eventID, ownerID string, tagNames []string) ([]*Tag, error)
+	AddSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error
+	RemoveSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error
+	UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*Tag, error)
 }
 
 // EventRepository defines the interface for event storage

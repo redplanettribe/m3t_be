@@ -1,5 +1,21 @@
 basePath: /
 definitions:
+  controllers.AddEventTagsRequest:
+    properties:
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  controllers.AddEventTagsSuccessResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/domain.Tag'
+        type: array
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
   controllers.AddEventTeamMemberRequest:
     properties:
       email:
@@ -11,6 +27,11 @@ definitions:
         $ref: '#/definitions/domain.EventTeamMember'
       error:
         $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.AddSessionTagRequest:
+    properties:
+      tag_id:
+        type: string
     type: object
   controllers.CreateEventRequest:
     properties:
@@ -349,6 +370,18 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/domain.Event'
+      error:
+        $ref: '#/definitions/helpers.APIError'
+    type: object
+  controllers.UpdateEventTagRequest:
+    properties:
+      name:
+        type: string
+    type: object
+  controllers.UpdateEventTagSuccessResponse:
+    properties:
+      data:
+        $ref: '#/definitions/domain.Tag'
       error:
         $ref: '#/definitions/helpers.APIError'
     type: object
@@ -1653,6 +1686,109 @@ paths:
       summary: Update session content
       tags:
       - events
+  /events/{eventID}/sessions/{sessionID}/tags:
+    post:
+      consumes:
+      - application/json
+      description: Links a tag (by id) to a session. The tag must already belong to
+        the event. Only the event owner can add. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Session ID (UUID)
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: Tag ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.AddSessionTagRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a tag to a session
+      tags:
+      - events
+  /events/{eventID}/sessions/{sessionID}/tags/{tagID}:
+    delete:
+      description: Unlinks a tag from a session. Only the event owner can remove.
+        Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Session ID (UUID)
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: Tag ID (UUID)
+        in: path
+        name: tagID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a tag from a session
+      tags:
+      - events
   /events/{eventID}/speakers:
     get:
       description: Returns the list of speakers for the event. Only the event owner
@@ -1875,6 +2011,114 @@ paths:
       security:
       - BearerAuth: []
       summary: List tags for an event
+      tags:
+      - events
+    post:
+      consumes:
+      - application/json
+      description: Adds one or more tags to the event by name (creates tags if missing).
+        Only the event owner can add. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Tag names
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.AddEventTagsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: data contains the event's tags after add
+          schema:
+            $ref: '#/definitions/controllers.AddEventTagsSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Add tags to an event
+      tags:
+      - events
+  /events/{eventID}/tags/{tagID}:
+    patch:
+      consumes:
+      - application/json
+      description: Renames a tag that belongs to the event. Only the event owner can
+        update. Requires authentication.
+      parameters:
+      - description: Event ID (UUID)
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Tag ID (UUID)
+        in: path
+        name: tagID
+        required: true
+        type: string
+      - description: New tag name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.UpdateEventTagRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data contains the updated tag
+          schema:
+            $ref: '#/definitions/controllers.UpdateEventTagSuccessResponse'
+        "400":
+          description: 'error.code: bad_request'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "401":
+          description: 'error.code: unauthorized'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "403":
+          description: 'error.code: forbidden (not owner)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "404":
+          description: 'error.code: not_found'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "409":
+          description: 'error.code: conflict (duplicate name)'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+        "500":
+          description: 'error.code: internal_error'
+          schema:
+            $ref: '#/definitions/helpers.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an event tag
       tags:
       - events
   /events/{eventID}/team-members:

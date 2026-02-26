@@ -437,6 +437,7 @@ func (f *fakeSessionRepo) UpdateSessionContent(ctx context.Context, sessionID st
 // fakeTagRepo is an in-memory TagRepository for tests.
 type fakeTagRepo struct {
 	byName      map[string]string // tag name -> tag ID
+	byID       map[string]string  // tag ID -> tag name
 	eventTags   map[string]map[string]bool
 	sessionTags map[string][]string
 	nextID      int
@@ -445,6 +446,7 @@ type fakeTagRepo struct {
 func newFakeTagRepo() *fakeTagRepo {
 	return &fakeTagRepo{
 		byName:      make(map[string]string),
+		byID:        make(map[string]string),
 		eventTags:   make(map[string]map[string]bool),
 		sessionTags: make(map[string][]string),
 		nextID:      1,
@@ -457,6 +459,7 @@ func (f *fakeTagRepo) EnsureTagForEvent(ctx context.Context, eventID, tagName st
 		tagID = fmt.Sprintf("tag-%d", f.nextID)
 		f.nextID++
 		f.byName[tagName] = tagID
+		f.byID[tagID] = tagName
 	}
 	if f.eventTags[eventID] == nil {
 		f.eventTags[eventID] = make(map[string]bool)
@@ -475,15 +478,58 @@ func (f *fakeTagRepo) ListTagsByEventID(ctx context.Context, eventID string) ([]
 	if !ok {
 		return nil, nil
 	}
-	nameByID := make(map[string]string)
-	for name, id := range f.byName {
-		nameByID[id] = name
-	}
 	var tags []*domain.Tag
 	for id := range tagIDs {
-		tags = append(tags, &domain.Tag{ID: id, Name: nameByID[id]})
+		if name, ok := f.byID[id]; ok {
+			tags = append(tags, &domain.Tag{ID: id, Name: name})
+		} else {
+			tags = append(tags, &domain.Tag{ID: id, Name: ""})
+		}
 	}
 	return tags, nil
+}
+
+func (f *fakeTagRepo) AddSessionTag(ctx context.Context, sessionID, tagID string) error {
+	for _, id := range f.sessionTags[sessionID] {
+		if id == tagID {
+			return nil
+		}
+	}
+	f.sessionTags[sessionID] = append(f.sessionTags[sessionID], tagID)
+	return nil
+}
+
+func (f *fakeTagRepo) RemoveSessionTag(ctx context.Context, sessionID, tagID string) error {
+	var newSlice []string
+	for _, id := range f.sessionTags[sessionID] {
+		if id != tagID {
+			newSlice = append(newSlice, id)
+		}
+	}
+	f.sessionTags[sessionID] = newSlice
+	return nil
+}
+
+func (f *fakeTagRepo) UpdateTagName(ctx context.Context, tagID, name string) error {
+	oldName, ok := f.byID[tagID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if existingID, exists := f.byName[name]; exists && existingID != tagID {
+		return fmt.Errorf("tag name already exists: %s", name)
+	}
+	delete(f.byName, oldName)
+	f.byName[name] = tagID
+	f.byID[tagID] = name
+	return nil
+}
+
+func (f *fakeTagRepo) GetTagByID(ctx context.Context, tagID string) (*domain.Tag, error) {
+	name, ok := f.byID[tagID]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	return &domain.Tag{ID: tagID, Name: name}, nil
 }
 
 // helper to build a default event service for tests
@@ -3848,6 +3894,349 @@ func TestEventService_ListEventTags(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, tags, tt.wantLen)
+		})
+	}
+}
+
+func TestEventService_AddEventTags(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, domain.SessionRepository, *fakeTagRepo)
+		eventID       string
+		ownerID       string
+		tagNames      []string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		wantMinLen    int
+	}{
+		{
+			name: "success adds tags",
+			setup: func() (domain.EventRepository, domain.SessionRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				return er, newFakeSessionRepo(), tr
+			},
+			eventID:    "ev-1",
+			ownerID:    "user-1",
+			tagNames:   []string{"Go", "Rust"},
+			wantMinLen: 2,
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, domain.SessionRepository, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeSessionRepo(), newFakeTagRepo()
+			},
+			eventID:      "ev-missing",
+			ownerID:      "user-1",
+			tagNames:     []string{"Go"},
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, domain.SessionRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				return er, newFakeSessionRepo(), newFakeTagRepo()
+			},
+			eventID:       "ev-1",
+			ownerID:       "user-2",
+			tagNames:      []string{"Go"},
+			wantErr:       true,
+			wantForbidden: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			er, sr, tr := tt.setup()
+			svc := NewEventService(er, sr, tr, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			tags, err := svc.AddEventTags(ctx, tt.eventID, tt.ownerID, tt.tagNames)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(tags), tt.wantMinLen)
+		})
+	}
+}
+
+func TestEventService_AddSessionTag(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo)
+		eventID       string
+		sessionID     string
+		ownerID       string
+		tagID         string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		assert        func(t *testing.T, tr *fakeTagRepo)
+	}{
+		{
+			name: "success adds tag to session",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk"}}
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				tags, _ := tr.ListTagsByEventID(ctx, "ev-1")
+				require.Len(t, tags, 1)
+				return er, sr, tr
+			},
+			eventID:   "ev-1",
+			sessionID: "sess-1",
+			ownerID:   "user-1",
+			tagID:     "tag-1",
+			assert: func(t *testing.T, tr *fakeTagRepo) {
+				require.Contains(t, tr.sessionTags["sess-1"], "tag-1")
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeSessionRepo(), newFakeTagRepo()
+			},
+			eventID:      "ev-missing",
+			sessionID:    "sess-1",
+			ownerID:      "user-1",
+			tagID:        "tag-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "tag not in event",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk"}}
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				return er, sr, tr
+			},
+			eventID:      "ev-1",
+			sessionID:   "sess-1",
+			ownerID:     "user-1",
+			tagID:       "tag-999",
+			wantErr:     true,
+			wantNotFound: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			er, sr, tr := tt.setup()
+			svc := NewEventService(er, sr, tr, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			err := svc.AddSessionTag(ctx, tt.eventID, tt.sessionID, tt.ownerID, tt.tagID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.assert != nil {
+				tt.assert(t, tr)
+			}
+		})
+	}
+}
+
+func TestEventService_RemoveSessionTag(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo)
+		eventID       string
+		sessionID     string
+		ownerID       string
+		tagID         string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+	}{
+		{
+			name: "success removes tag",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				sr := newFakeSessionRepo()
+				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk"}}
+				tr := newFakeTagRepo()
+				tr.sessionTags["sess-1"] = []string{"tag-1", "tag-2"}
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				return er, sr, tr
+			},
+			eventID:   "ev-1",
+			sessionID: "sess-1",
+			ownerID:   "user-1",
+			tagID:     "tag-1",
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, *fakeSessionRepo, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeSessionRepo(), newFakeTagRepo()
+			},
+			eventID:      "ev-missing",
+			sessionID:    "sess-1",
+			ownerID:      "user-1",
+			tagID:        "tag-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			er, sr, tr := tt.setup()
+			svc := NewEventService(er, sr, tr, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			err := svc.RemoveSessionTag(ctx, tt.eventID, tt.sessionID, tt.ownerID, tt.tagID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.name == "success removes tag" {
+				require.NotContains(t, tr.sessionTags["sess-1"], "tag-1")
+			}
+		})
+	}
+}
+
+func TestEventService_UpdateEventTag(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, *fakeTagRepo)
+		eventID       string
+		tagID         string
+		ownerID       string
+		newName       string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		wantInvalid   bool
+		wantName      string
+	}{
+		{
+			name: "success renames tag",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				return er, tr
+			},
+			eventID:  "ev-1",
+			tagID:    "tag-1",
+			ownerID:  "user-1",
+			newName:  "Golang",
+			wantName: "Golang",
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeTagRepo()
+			},
+			eventID:      "ev-missing",
+			tagID:        "tag-1",
+			ownerID:      "user-1",
+			newName:      "X",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "tag not in event",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				tr.byID["tag-999"] = "Other"
+				tr.byName["Other"] = "tag-999"
+				return er, tr
+			},
+			eventID:      "ev-1",
+			tagID:       "tag-999",
+			ownerID:     "user-1",
+			newName:     "X",
+			wantErr:     true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				return er, tr
+			},
+			eventID:       "ev-1",
+			tagID:         "tag-1",
+			ownerID:       "user-2",
+			newName:       "X",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			er, tr := tt.setup()
+			svc := NewEventService(er, newFakeSessionRepo(), tr, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			tag, err := svc.UpdateEventTag(ctx, tt.eventID, tt.tagID, tt.ownerID, tt.newName)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				if tt.wantInvalid {
+					require.True(t, errors.Is(err, domain.ErrInvalidInput))
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, tag)
+			if tt.wantName != "" {
+				require.Equal(t, tt.wantName, tag.Name)
+				require.Equal(t, tt.tagID, tag.ID)
+			}
 		})
 	}
 }

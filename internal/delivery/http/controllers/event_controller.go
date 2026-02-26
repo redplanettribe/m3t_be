@@ -1549,6 +1549,263 @@ func (c *ScheduleController) ListEventTags(w http.ResponseWriter, r *http.Reques
 	helpers.WriteJSONSuccess(w, http.StatusOK, tags)
 }
 
+// AddEventTagsRequest is the request body for POST /events/{eventID}/tags.
+type AddEventTagsRequest struct {
+	Tags []string `json:"tags"`
+}
+
+// Validate implements Validator.
+func (a AddEventTagsRequest) Validate() []string {
+	if len(a.Tags) == 0 {
+		return []string{"at least one tag name is required"}
+	}
+	return nil
+}
+
+// AddEventTagsSuccessResponse is the success response envelope for POST /events/{eventID}/tags (201).
+type AddEventTagsSuccessResponse struct {
+	Data  []*domain.Tag     `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// AddEventTags godoc
+// @Summary Add tags to an event
+// @Description Adds one or more tags to the event by name (creates tags if missing). Only the event owner can add. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param body body AddEventTagsRequest true "Tag names"
+// @Success 201 {object} controllers.AddEventTagsSuccessResponse "data contains the event's tags after add"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/tags [post]
+func (c *ScheduleController) AddEventTags(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	if eventID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID")
+		return
+	}
+	var req AddEventTagsRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	tags, err := c.Service.AddEventTags(r.Context(), eventID, ownerID, req.Tags)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if tags == nil {
+		tags = []*domain.Tag{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusCreated, tags)
+}
+
+// UpdateEventTagRequest is the request body for PATCH /events/{eventID}/tags/{tagID}.
+type UpdateEventTagRequest struct {
+	Name string `json:"name"`
+}
+
+// Validate implements Validator.
+func (u UpdateEventTagRequest) Validate() []string {
+	if strings.TrimSpace(u.Name) == "" {
+		return []string{"name is required"}
+	}
+	return nil
+}
+
+// UpdateEventTagSuccessResponse is the success response envelope for PATCH /events/{eventID}/tags/{tagID} (200).
+type UpdateEventTagSuccessResponse struct {
+	Data  *domain.Tag       `json:"data"`
+	Error *helpers.APIError `json:"error"`
+}
+
+// UpdateEventTag godoc
+// @Summary Update an event tag
+// @Description Renames a tag that belongs to the event. Only the event owner can update. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param tagID path string true "Tag ID (UUID)"
+// @Param body body UpdateEventTagRequest true "New tag name"
+// @Success 200 {object} controllers.UpdateEventTagSuccessResponse "data contains the updated tag"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 409 {object} helpers.APIResponse "error.code: conflict (duplicate name)"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/tags/{tagID} [patch]
+func (c *ScheduleController) UpdateEventTag(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	tagID := r.PathValue("tagID")
+	if eventID == "" || tagID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or tagID")
+		return
+	}
+	var req UpdateEventTagRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	tag, err := c.Service.UpdateEventTag(r.Context(), eventID, tagID, ownerID, req.Name)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or tag not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "already exists") {
+			helpers.WriteJSONError(w, http.StatusConflict, helpers.ErrCodeConflict, err.Error())
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, tag)
+}
+
+// AddSessionTagRequest is the request body for POST /events/{eventID}/sessions/{sessionID}/tags.
+type AddSessionTagRequest struct {
+	TagID string `json:"tag_id"`
+}
+
+// Validate implements Validator.
+func (a AddSessionTagRequest) Validate() []string {
+	if strings.TrimSpace(a.TagID) == "" {
+		return []string{"tag_id is required"}
+	}
+	return nil
+}
+
+// AddSessionTag godoc
+// @Summary Add a tag to a session
+// @Description Links a tag (by id) to a session. The tag must already belong to the event. Only the event owner can add. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Param body body AddSessionTagRequest true "Tag ID"
+// @Success 204 "No content"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID}/tags [post]
+func (c *ScheduleController) AddSessionTag(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	if eventID == "" || sessionID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionID")
+		return
+	}
+	var req AddSessionTagRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	err := c.Service.AddSessionTag(r.Context(), eventID, sessionID, ownerID, req.TagID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event, session, or tag not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RemoveSessionTag godoc
+// @Summary Remove a tag from a session
+// @Description Unlinks a tag from a session. Only the event owner can remove. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Param tagID path string true "Tag ID (UUID)"
+// @Success 204 "No content"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID}/tags/{tagID} [delete]
+func (c *ScheduleController) RemoveSessionTag(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	tagID := r.PathValue("tagID")
+	if eventID == "" || sessionID == "" || tagID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID, sessionID, or tagID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	err := c.Service.RemoveSessionTag(r.Context(), eventID, sessionID, ownerID, tagID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or session not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // CreateEventSession godoc
 // @Summary Create a session
 // @Description Creates a new session for the event in a given room and time slot, with optional tags and speakers. Only the event owner can create. Requires authentication.

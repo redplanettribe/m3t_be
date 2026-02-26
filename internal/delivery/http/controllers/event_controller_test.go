@@ -145,6 +145,31 @@ type fakeEventService struct {
 	listEventTagsResult       []*domain.Tag
 	lastListEventTagsEventID  string
 	lastListEventTagsCallerID string
+	// AddEventTags
+	addEventTagsErr          error
+	addEventTagsResult       []*domain.Tag
+	lastAddEventTagsEventID  string
+	lastAddEventTagsOwnerID  string
+	lastAddEventTagsTagNames []string
+	// UpdateEventTag
+	updateEventTagErr          error
+	updateEventTagResult       *domain.Tag
+	lastUpdateEventTagEventID  string
+	lastUpdateEventTagTagID    string
+	lastUpdateEventTagOwnerID  string
+	lastUpdateEventTagName     string
+	// AddSessionTag
+	addSessionTagErr          error
+	lastAddSessionTagEventID   string
+	lastAddSessionTagSessionID string
+	lastAddSessionTagOwnerID   string
+	lastAddSessionTagTagID     string
+	// RemoveSessionTag
+	removeSessionTagErr          error
+	lastRemoveSessionTagEventID   string
+	lastRemoveSessionTagSessionID string
+	lastRemoveSessionTagOwnerID   string
+	lastRemoveSessionTagTagID    string
 	// CreateEventSession
 	createEventSessionErr          error
 	createEventSessionResult       *domain.Session
@@ -354,6 +379,49 @@ func (f *fakeEventService) ListEventTags(ctx context.Context, eventID, callerID 
 		return f.listEventTagsResult, nil
 	}
 	return []*domain.Tag{}, nil
+}
+
+func (f *fakeEventService) AddEventTags(ctx context.Context, eventID, ownerID string, tagNames []string) ([]*domain.Tag, error) {
+	f.lastAddEventTagsEventID = eventID
+	f.lastAddEventTagsOwnerID = ownerID
+	f.lastAddEventTagsTagNames = tagNames
+	if f.addEventTagsErr != nil {
+		return nil, f.addEventTagsErr
+	}
+	if f.addEventTagsResult != nil {
+		return f.addEventTagsResult, nil
+	}
+	return []*domain.Tag{}, nil
+}
+
+func (f *fakeEventService) AddSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error {
+	f.lastAddSessionTagEventID = eventID
+	f.lastAddSessionTagSessionID = sessionID
+	f.lastAddSessionTagOwnerID = ownerID
+	f.lastAddSessionTagTagID = tagID
+	return f.addSessionTagErr
+}
+
+func (f *fakeEventService) RemoveSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error {
+	f.lastRemoveSessionTagEventID = eventID
+	f.lastRemoveSessionTagSessionID = sessionID
+	f.lastRemoveSessionTagOwnerID = ownerID
+	f.lastRemoveSessionTagTagID = tagID
+	return f.removeSessionTagErr
+}
+
+func (f *fakeEventService) UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*domain.Tag, error) {
+	f.lastUpdateEventTagEventID = eventID
+	f.lastUpdateEventTagTagID = tagID
+	f.lastUpdateEventTagOwnerID = ownerID
+	f.lastUpdateEventTagName = name
+	if f.updateEventTagErr != nil {
+		return nil, f.updateEventTagErr
+	}
+	if f.updateEventTagResult != nil {
+		return f.updateEventTagResult, nil
+	}
+	return &domain.Tag{ID: tagID, Name: name}, nil
 }
 
 func (f *fakeEventService) ListEventSpeakers(ctx context.Context, eventID, ownerID string) ([]*domain.Speaker, error) {
@@ -1507,6 +1575,380 @@ func TestScheduleController_ListEventTags(t *testing.T) {
 				require.NoError(t, json.Unmarshal(dataBytes, &tags))
 				require.Len(t, tags, len(tt.fakeResult))
 			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_AddEventTags(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		body           string
+		noUserContext  bool
+		fakeErr        error
+		fakeResult     []*domain.Tag
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			body:       `{"tags":["Go","Rust"]}`,
+			fakeResult: []*domain.Tag{{ID: "tag-1", Name: "Go"}, {ID: "tag-2", Name: "Rust"}},
+			wantStatus: http.StatusCreated,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastAddEventTagsEventID)
+				assert.Equal(t, "user-123", fake.lastAddEventTagsOwnerID)
+				assert.ElementsMatch(t, []string{"Go", "Rust"}, fake.lastAddEventTagsTagNames)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			body:           `{"tags":["Go"]}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			body:           `{"tags":["Go"]}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "invalid body empty tags",
+			eventID:        "ev-1",
+			body:           `{"tags":[]}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "at least one tag",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			body:           `{"tags":["Go"]}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			body:           `{"tags":["Go"]}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{addEventTagsErr: tt.fakeErr, addEventTagsResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := "http://test/events/" + tt.eventID + "/tags"
+			if tt.eventID == "" {
+				path = "http://test/events//tags"
+			}
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tt.eventID != "" {
+				req.SetPathValue("eventID", tt.eventID)
+			}
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.AddEventTags(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusCreated && tt.checkCall != nil {
+				tt.checkCall(t, fake)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_UpdateEventTag(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		tagID          string
+		body           string
+		noUserContext  bool
+		fakeErr        error
+		fakeResult     *domain.Tag
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			tagID:      "tag-1",
+			body:       `{"name":"Golang"}`,
+			fakeResult: &domain.Tag{ID: "tag-1", Name: "Golang"},
+			wantStatus: http.StatusOK,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastUpdateEventTagEventID)
+				assert.Equal(t, "tag-1", fake.lastUpdateEventTagTagID)
+				assert.Equal(t, "user-123", fake.lastUpdateEventTagOwnerID)
+				assert.Equal(t, "Golang", fake.lastUpdateEventTagName)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			tagID:          "tag-1",
+			body:           `{"name":"X"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or tagID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			tagID:          "tag-1",
+			body:           `{"name":"X"}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			tagID:          "tag-1",
+			body:           `{"name":"X"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			tagID:          "tag-1",
+			body:           `{"name":"X"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{updateEventTagErr: tt.fakeErr, updateEventTagResult: tt.fakeResult}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := fmt.Sprintf("http://test/events/%s/tags/%s", tt.eventID, tt.tagID)
+			req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.SetPathValue("eventID", tt.eventID)
+			req.SetPathValue("tagID", tt.tagID)
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.UpdateEventTag(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantStatus == http.StatusOK && tt.checkCall != nil {
+				tt.checkCall(t, fake)
+			}
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_AddSessionTag(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		sessionID      string
+		body           string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:      "success",
+			eventID:   "ev-1",
+			sessionID: "sess-1",
+			body:      `{"tag_id":"tag-1"}`,
+			wantStatus: http.StatusNoContent,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastAddSessionTagEventID)
+				assert.Equal(t, "sess-1", fake.lastAddSessionTagSessionID)
+				assert.Equal(t, "user-123", fake.lastAddSessionTagOwnerID)
+				assert.Equal(t, "tag-1", fake.lastAddSessionTagTagID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			sessionID:      "sess-1",
+			body:           `{"tag_id":"tag-1"}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or sessionID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{"tag_id":"tag-1"}`,
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "invalid body missing tag_id",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{}`,
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "tag_id",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			sessionID:      "sess-1",
+			body:           `{"tag_id":"tag-1"}`,
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			body:           `{"tag_id":"tag-1"}`,
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{addSessionTagErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := fmt.Sprintf("http://test/events/%s/sessions/%s/tags", tt.eventID, tt.sessionID)
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.SetPathValue("eventID", tt.eventID)
+			req.SetPathValue("sessionID", tt.sessionID)
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.AddSessionTag(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantStatus == http.StatusNoContent {
+				if tt.checkCall != nil {
+					tt.checkCall(t, fake)
+				}
+				return
+			}
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_RemoveSessionTag(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		sessionID      string
+		tagID          string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:   "ev-1",
+			sessionID: "sess-1",
+			tagID:     "tag-1",
+			wantStatus: http.StatusNoContent,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastRemoveSessionTagEventID)
+				assert.Equal(t, "sess-1", fake.lastRemoveSessionTagSessionID)
+				assert.Equal(t, "user-123", fake.lastRemoveSessionTagOwnerID)
+				assert.Equal(t, "tag-1", fake.lastRemoveSessionTagTagID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			sessionID:      "sess-1",
+			tagID:          "tag-1",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID, sessionID, or tagID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			tagID:          "tag-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event not found",
+			eventID:        "ev-missing",
+			sessionID:      "sess-1",
+			tagID:          "tag-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			sessionID:      "sess-1",
+			tagID:          "tag-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{removeSessionTagErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := fmt.Sprintf("http://test/events/%s/sessions/%s/tags/%s", tt.eventID, tt.sessionID, tt.tagID)
+			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			req.SetPathValue("eventID", tt.eventID)
+			req.SetPathValue("sessionID", tt.sessionID)
+			req.SetPathValue("tagID", tt.tagID)
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.RemoveSessionTag(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantStatus == http.StatusNoContent {
+				if tt.checkCall != nil {
+					tt.checkCall(t, fake)
+				}
+				return
+			}
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
 			if tt.wantBodySubstr != "" && envelope.Error != nil {
 				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
 			}

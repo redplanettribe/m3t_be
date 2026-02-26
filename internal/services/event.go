@@ -1058,6 +1058,161 @@ func (s *eventService) ListEventTags(ctx context.Context, eventID, callerID stri
 	return tags, nil
 }
 
+func (s *eventService) AddEventTags(ctx context.Context, eventID, ownerID string, tagNames []string) ([]*domain.Tag, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	for _, name := range tagNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, err := s.tagRepo.EnsureTagForEvent(ctx, eventID, name); err != nil {
+			return nil, fmt.Errorf("ensure tag for event: %w", err)
+		}
+	}
+	return s.tagRepo.ListTagsByEventID(ctx, eventID)
+}
+
+func (s *eventService) AddSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get session: %w", err)
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	eventTags, err := s.tagRepo.ListTagsByEventID(ctx, eventID)
+	if err != nil {
+		return fmt.Errorf("list event tags: %w", err)
+	}
+	var tagInEvent bool
+	for _, t := range eventTags {
+		if t.ID == tagID {
+			tagInEvent = true
+			break
+		}
+	}
+	if !tagInEvent {
+		return domain.ErrNotFound
+	}
+	if err := s.tagRepo.AddSessionTag(ctx, sessionID, tagID); err != nil {
+		return fmt.Errorf("add session tag: %w", err)
+	}
+	return nil
+}
+
+func (s *eventService) RemoveSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get session: %w", err)
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	if err := s.tagRepo.RemoveSessionTag(ctx, sessionID, tagID); err != nil {
+		return fmt.Errorf("remove session tag: %w", err)
+	}
+	return nil
+}
+
+func (s *eventService) UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*domain.Tag, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return nil, domain.ErrForbidden
+	}
+	eventTags, err := s.tagRepo.ListTagsByEventID(ctx, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("list event tags: %w", err)
+	}
+	var tagInEvent bool
+	for _, t := range eventTags {
+		if t.ID == tagID {
+			tagInEvent = true
+			break
+		}
+	}
+	if !tagInEvent {
+		return nil, domain.ErrNotFound
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	if err := s.tagRepo.UpdateTagName(ctx, tagID, name); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("update tag name: %w", err)
+	}
+	return s.tagRepo.GetTagByID(ctx, tagID)
+}
+
 func (s *eventService) SendEventInvitations(ctx context.Context, eventID, ownerID string, emails []string) (sent int, failed []string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
