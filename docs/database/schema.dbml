@@ -23,6 +23,7 @@ Table rooms {
   event_id uuid [not null, ref: > events.id]
   name varchar(255) [not null]
   source_session_id int
+  source varchar(20)
   not_bookable boolean [not null, default: `false`]
   capacity int
   description text
@@ -39,7 +40,8 @@ Table rooms {
 Table sessions {
   id uuid [pk, default: `gen_random_uuid()`]
   room_id uuid [not null, ref: > rooms.id]
-  sessionize_session_id varchar(50)
+  source_session_id varchar(50)
+  source varchar(20)
   title varchar(255) [not null]
   start_time timestamptz [not null]
   end_time timestamptz [not null]
@@ -48,7 +50,7 @@ Table sessions {
   updated_at timestamptz [default: `now()`]
 
   indexes {
-    (room_id, sessionize_session_id) [unique]
+    (room_id, source_session_id) [unique]
     room_id
   }
 }
@@ -83,7 +85,8 @@ Table event_tags {
 Table speakers {
   id uuid [pk, default: `gen_random_uuid()`]
   event_id uuid [not null, ref: > events.id]
-  sessionize_speaker_id varchar(100) [not null]
+  source_session_id varchar(100) [not null]
+  source varchar(20)
   first_name varchar(255) [not null, default: `''`]
   last_name varchar(255) [not null, default: `''`]
   full_name varchar(512) [not null, default: `''`]
@@ -95,7 +98,7 @@ Table speakers {
   updated_at timestamptz [default: `now()`]
 
   indexes {
-    (event_id, sessionize_speaker_id) [unique]
+    (event_id, source_session_id) [unique]
     event_id
   }
 }

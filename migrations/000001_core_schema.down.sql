@@ -1,6 +1,15 @@
+DROP TABLE IF EXISTS event_invitations;
+DROP TABLE IF EXISTS event_registrations;
+DROP TABLE IF EXISTS event_team_members;
+DROP TABLE IF EXISTS session_speakers;
+DROP TABLE IF EXISTS speakers;
+DROP TABLE IF EXISTS session_tags;
+DROP TABLE IF EXISTS event_tags;
+DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS rooms;
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS user_roles;
 DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS login_codes;
 DROP TABLE IF EXISTS users;
