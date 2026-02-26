@@ -132,7 +132,6 @@ type fakeEventService struct {
 	lastCreateEventSpeakerOwnerID   string
 	lastCreateEventSpeakerFirstName string
 	lastCreateEventSpeakerLastName  string
-	lastCreateEventSpeakerFullName  string
 	// CreateEventRoom
 	createEventRoomErr          error
 	createEventRoomResult       *domain.Room
@@ -472,19 +471,18 @@ func (f *fakeEventService) DeleteEventSpeaker(ctx context.Context, eventID, spea
 	return f.deleteEventSpeakerErr
 }
 
-func (f *fakeEventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*domain.Speaker, error) {
+func (f *fakeEventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*domain.Speaker, error) {
 	f.lastCreateEventSpeakerEventID = eventID
 	f.lastCreateEventSpeakerOwnerID = ownerID
 	f.lastCreateEventSpeakerFirstName = firstName
 	f.lastCreateEventSpeakerLastName = lastName
-	f.lastCreateEventSpeakerFullName = fullName
 	if f.createEventSpeakerErr != nil {
 		return nil, f.createEventSpeakerErr
 	}
 	if f.createEventSpeakerResult != nil {
 		return f.createEventSpeakerResult, nil
 	}
-	return &domain.Speaker{ID: "sp-created", EventID: eventID, FirstName: firstName, LastName: lastName, FullName: fullName}, nil
+	return &domain.Speaker{ID: "sp-created", EventID: eventID, FirstName: firstName, LastName: lastName}, nil
 }
 
 func (f *fakeEventService) CreateEventRoom(ctx context.Context, eventID, ownerID, name string, capacity int, description, howToGetThere string, notBookable bool) (*domain.Room, error) {
@@ -1434,7 +1432,7 @@ func TestScheduleController_ListEventSpeakers(t *testing.T) {
 		{
 			name:       "success",
 			eventID:    "ev-1",
-			fakeResult: []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}},
+			fakeResult: []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""}},
 			wantStatus: http.StatusOK,
 			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, "ev-1", fake.lastListEventSpeakersEventID)
@@ -2083,7 +2081,7 @@ func TestScheduleController_GetEventSpeaker(t *testing.T) {
 			name:         "success",
 			eventID:      "ev-1",
 			speakerID:    "sp-1",
-			fakeSpeaker:  &domain.Speaker{ID: "sp-1", EventID: "ev-1", FullName: "Alice"},
+			fakeSpeaker:  &domain.Speaker{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""},
 			fakeSessions: []*domain.Session{{ID: "sess-1", Title: "Talk"}},
 			wantStatus:   http.StatusOK,
 			checkCall: func(t *testing.T, fake *fakeEventService) {
@@ -2278,27 +2276,26 @@ func TestScheduleController_CreateEventSpeaker(t *testing.T) {
 		{
 			name:       "success",
 			eventID:    "ev-1",
-			body:       `{"first_name":"Jane","last_name":"Doe","full_name":"Jane Doe","bio":"Bio","is_top_speaker":true}`,
+			body:       `{"first_name":"Jane","last_name":"Doe","bio":"Bio","is_top_speaker":true}`,
 			wantStatus: http.StatusCreated,
 			checkCall: func(t *testing.T, fake *fakeEventService) {
 				assert.Equal(t, "ev-1", fake.lastCreateEventSpeakerEventID)
 				assert.Equal(t, "user-123", fake.lastCreateEventSpeakerOwnerID)
 				assert.Equal(t, "Jane", fake.lastCreateEventSpeakerFirstName)
 				assert.Equal(t, "Doe", fake.lastCreateEventSpeakerLastName)
-				assert.Equal(t, "Jane Doe", fake.lastCreateEventSpeakerFullName)
 			},
 		},
 		{
 			name:           "missing eventID",
 			eventID:        "",
-			body:           `{"full_name":"Alice"}`,
+			body:           `{"first_name":"Alice"}`,
 			wantStatus:     http.StatusBadRequest,
 			wantBodySubstr: "missing eventID",
 		},
 		{
 			name:           "no user in context",
 			eventID:        "ev-1",
-			body:           `{"full_name":"Alice"}`,
+			body:           `{"first_name":"Alice"}`,
 			noUserContext:  true,
 			wantStatus:     http.StatusUnauthorized,
 			wantBodySubstr: "unauthorized",
@@ -2308,7 +2305,7 @@ func TestScheduleController_CreateEventSpeaker(t *testing.T) {
 			eventID:        "ev-1",
 			body:           `{}`,
 			wantStatus:     http.StatusBadRequest,
-			wantBodySubstr: "at least one of full_name, first_name, or last_name is required",
+			wantBodySubstr: "at least one of first_name or last_name is required",
 		},
 		{
 			name:           "invalid json",
@@ -2320,7 +2317,7 @@ func TestScheduleController_CreateEventSpeaker(t *testing.T) {
 		{
 			name:           "not found",
 			eventID:        "ev-missing",
-			body:           `{"full_name":"Alice"}`,
+			body:           `{"first_name":"Alice"}`,
 			fakeErr:        domain.ErrNotFound,
 			wantStatus:     http.StatusNotFound,
 			wantBodySubstr: "event not found",
@@ -2328,7 +2325,7 @@ func TestScheduleController_CreateEventSpeaker(t *testing.T) {
 		{
 			name:           "forbidden",
 			eventID:        "ev-1",
-			body:           `{"full_name":"Alice"}`,
+			body:           `{"first_name":"Alice"}`,
 			fakeErr:        domain.ErrForbidden,
 			wantStatus:     http.StatusForbidden,
 			wantBodySubstr: "forbidden",

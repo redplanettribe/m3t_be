@@ -478,18 +478,17 @@ type CreateRoomSuccessResponse struct {
 type CreateSpeakerRequest struct {
 	FirstName      string `json:"first_name"`
 	LastName       string `json:"last_name"`
-	FullName       string `json:"full_name"`
 	Bio            string `json:"bio"`
 	TagLine        string `json:"tag_line"`
 	ProfilePicture string `json:"profile_picture"`
 	IsTopSpeaker   bool   `json:"is_top_speaker"`
 }
 
-// Validate implements Validator. At least one of full_name or (first_name or last_name) must be non-empty.
+// Validate implements Validator. At least one of first_name or last_name must be non-empty.
 func (c CreateSpeakerRequest) Validate() []string {
-	hasName := strings.TrimSpace(c.FullName) != "" || strings.TrimSpace(c.FirstName) != "" || strings.TrimSpace(c.LastName) != ""
+	hasName := strings.TrimSpace(c.FirstName) != "" || strings.TrimSpace(c.LastName) != ""
 	if !hasName {
-		return []string{"at least one of full_name, first_name, or last_name is required"}
+		return []string{"at least one of first_name or last_name is required"}
 	}
 	return nil
 }
@@ -866,7 +865,7 @@ func (c *ScheduleController) CreateEventSpeaker(w http.ResponseWriter, r *http.R
 		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
 		return
 	}
-	speaker, err := c.Service.CreateEventSpeaker(r.Context(), eventID, ownerID, req.FirstName, req.LastName, req.FullName, req.Bio, req.TagLine, req.ProfilePicture, req.IsTopSpeaker)
+	speaker, err := c.Service.CreateEventSpeaker(r.Context(), eventID, ownerID, req.FirstName, req.LastName, req.Bio, req.TagLine, req.ProfilePicture, req.IsTopSpeaker)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event not found")

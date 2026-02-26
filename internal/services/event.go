@@ -259,9 +259,9 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	speakerMap := make(map[string]string) // Sessionize speaker UUID -> domain speaker ID
 	for _, sp := range sessionData.Speakers {
 		now := time.Now()
-		domainSp := domain.NewSpeaker(eventID, sp.ID, "sessionize", sp.FirstName, sp.LastName, sp.FullName, sp.Bio, sp.TagLine, sp.ProfilePicture, sp.IsTopSpeaker, now, now)
+		domainSp := domain.NewSpeaker(eventID, sp.ID, "sessionize", sp.FirstName, sp.LastName, sp.Bio, sp.TagLine, sp.ProfilePicture, sp.IsTopSpeaker, now, now)
 		if err := s.sessionRepo.CreateSpeaker(ctx, domainSp); err != nil {
-			return fmt.Errorf("failed to create speaker %s: %w", sp.FullName, err)
+			return fmt.Errorf("failed to create speaker %s %s: %w", sp.FirstName, sp.LastName, err)
 		}
 		speakerMap[sp.ID] = domainSp.ID
 	}
@@ -878,7 +878,7 @@ func generateManualSpeakerID() (string, error) {
 	return "manual-" + hex.EncodeToString(b), nil
 }
 
-func (s *eventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*domain.Speaker, error) {
+func (s *eventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*domain.Speaker, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()
 
@@ -896,11 +896,8 @@ func (s *eventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID 
 	if err != nil {
 		return nil, fmt.Errorf("generate manual speaker id: %w", err)
 	}
-	if fullName == "" {
-		fullName = strings.TrimSpace(firstName + " " + lastName)
-	}
 	now := time.Now()
-	speaker := domain.NewSpeaker(eventID, sessionizeSpeakerID, "admin_app", firstName, lastName, fullName, bio, tagLine, profilePicture, isTopSpeaker, now, now)
+	speaker := domain.NewSpeaker(eventID, sessionizeSpeakerID, "admin_app", firstName, lastName, bio, tagLine, profilePicture, isTopSpeaker, now, now)
 	if err := s.sessionRepo.CreateSpeaker(ctx, speaker); err != nil {
 		return nil, fmt.Errorf("create speaker: %w", err)
 	}

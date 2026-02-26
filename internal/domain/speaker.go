@@ -11,7 +11,6 @@ type Speaker struct {
 	Source           string    `json:"source"`
 	FirstName        string    `json:"first_name"`
 	LastName         string    `json:"last_name"`
-	FullName         string    `json:"full_name"`
 	Bio              string    `json:"bio"`
 	TagLine          string    `json:"tag_line"`
 	ProfilePicture   string    `json:"profile_picture"`
@@ -21,14 +20,13 @@ type Speaker struct {
 }
 
 // NewSpeaker returns a new Speaker with the given fields. ID is typically set by the repository on create.
-func NewSpeaker(eventID, sourceSessionID, source, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool, createdAt, updatedAt time.Time) *Speaker {
+func NewSpeaker(eventID, sourceSessionID, source, firstName, lastName, bio, tagLine, profilePicture string, isTopSpeaker bool, createdAt, updatedAt time.Time) *Speaker {
 	return &Speaker{
 		EventID:         eventID,
 		SourceSessionID: sourceSessionID,
 		Source:          source,
 		FirstName:       firstName,
 		LastName:        lastName,
-		FullName:        fullName,
 		Bio:             bio,
 		TagLine:         tagLine,
 		ProfilePicture:  profilePicture,

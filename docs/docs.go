@@ -2762,9 +2762,6 @@ const docTemplate = `{
                 "first_name": {
                     "type": "string"
                 },
-                "full_name": {
-                    "type": "string"
-                },
                 "is_top_speaker": {
                     "type": "boolean"
                 },
@@ -3537,9 +3534,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "first_name": {
-                    "type": "string"
-                },
-                "full_name": {
                     "type": "string"
                 },
                 "id": {

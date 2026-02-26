@@ -2756,9 +2756,6 @@
                 "first_name": {
                     "type": "string"
                 },
-                "full_name": {
-                    "type": "string"
-                },
                 "is_top_speaker": {
                     "type": "boolean"
                 },
@@ -3531,9 +3528,6 @@
                     "type": "string"
                 },
                 "first_name": {
-                    "type": "string"
-                },
-                "full_name": {
                     "type": "string"
                 },
                 "id": {

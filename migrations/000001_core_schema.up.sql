@@ -138,7 +138,6 @@ CREATE TABLE IF NOT EXISTS speakers (
         CHECK (source IN ('sessionize', 'admin_app')),
     first_name VARCHAR(255) NOT NULL DEFAULT '',
     last_name VARCHAR(255) NOT NULL DEFAULT '',
-    full_name VARCHAR(512) NOT NULL DEFAULT '',
     bio TEXT NOT NULL DEFAULT '',
     tag_line VARCHAR(512) NOT NULL DEFAULT '',
     profile_picture TEXT NOT NULL DEFAULT '',

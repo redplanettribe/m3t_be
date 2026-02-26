@@ -59,7 +59,7 @@ type EventService interface {
 	ListEventSpeakers(ctx context.Context, eventID, ownerID string) ([]*Speaker, error)
 	GetEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) (*Speaker, []*Session, error)
 	DeleteEventSpeaker(ctx context.Context, eventID, speakerID, ownerID string) error
-	CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, fullName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*Speaker, error)
+	CreateEventSpeaker(ctx context.Context, eventID, ownerID string, firstName, lastName, bio, tagLine, profilePicture string, isTopSpeaker bool) (*Speaker, error)
 	AddEventTeamMember(ctx context.Context, eventID, userIDToAdd, ownerID string) error
 	AddEventTeamMemberByEmail(ctx context.Context, eventID, email, ownerID string) (*EventTeamMember, error)
 	ListEventTeamMembers(ctx context.Context, eventID, callerID string) ([]*EventTeamMember, error)

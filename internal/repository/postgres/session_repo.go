@@ -43,14 +43,14 @@ func (r *SessionRepository) CreateSession(ctx context.Context, s *domain.Session
 
 func (r *SessionRepository) CreateSpeaker(ctx context.Context, speaker *domain.Speaker) error {
 	query := `
-		INSERT INTO speakers (event_id, source_session_id, source, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO speakers (event_id, source_session_id, source, first_name, last_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (event_id, source_session_id) DO UPDATE
-		SET source = EXCLUDED.source, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, full_name = EXCLUDED.full_name, bio = EXCLUDED.bio, tag_line = EXCLUDED.tag_line, profile_picture = EXCLUDED.profile_picture, is_top_speaker = EXCLUDED.is_top_speaker, updated_at = EXCLUDED.updated_at
+		SET source = EXCLUDED.source, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, bio = EXCLUDED.bio, tag_line = EXCLUDED.tag_line, profile_picture = EXCLUDED.profile_picture, is_top_speaker = EXCLUDED.is_top_speaker, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
 	return r.DB.QueryRowContext(ctx, query,
-		speaker.EventID, speaker.SourceSessionID, speaker.Source, speaker.FirstName, speaker.LastName, speaker.FullName,
+		speaker.EventID, speaker.SourceSessionID, speaker.Source, speaker.FirstName, speaker.LastName,
 		speaker.Bio, speaker.TagLine, speaker.ProfilePicture, speaker.IsTopSpeaker, speaker.CreatedAt, speaker.UpdatedAt,
 	).Scan(&speaker.ID)
 }
@@ -306,7 +306,7 @@ func (r *SessionRepository) ListSpeakerIDsBySessionIDs(ctx context.Context, sess
 
 func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string) (*domain.Speaker, error) {
 	query := `
-		SELECT id, event_id, source_session_id, source, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
+		SELECT id, event_id, source_session_id, source, first_name, last_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
 		FROM speakers
 		WHERE id = $1
 	`
@@ -318,7 +318,6 @@ func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string
 		&sp.Source,
 		&sp.FirstName,
 		&sp.LastName,
-		&sp.FullName,
 		&sp.Bio,
 		&sp.TagLine,
 		&sp.ProfilePicture,
@@ -337,10 +336,10 @@ func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string
 
 func (r *SessionRepository) ListSpeakersByEventID(ctx context.Context, eventID string) ([]*domain.Speaker, error) {
 	query := `
-		SELECT id, event_id, source_session_id, source, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
+		SELECT id, event_id, source_session_id, source, first_name, last_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
 		FROM speakers
 		WHERE event_id = $1
-		ORDER BY full_name, id
+		ORDER BY first_name, last_name, id
 	`
 	rows, err := r.DB.QueryContext(ctx, query, eventID)
 	if err != nil {
@@ -350,7 +349,7 @@ func (r *SessionRepository) ListSpeakersByEventID(ctx context.Context, eventID s
 	var speakers []*domain.Speaker
 	for rows.Next() {
 		sp := &domain.Speaker{}
-		if err := rows.Scan(&sp.ID, &sp.EventID, &sp.SourceSessionID, &sp.Source, &sp.FirstName, &sp.LastName, &sp.FullName, &sp.Bio, &sp.TagLine, &sp.ProfilePicture, &sp.IsTopSpeaker, &sp.CreatedAt, &sp.UpdatedAt); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.EventID, &sp.SourceSessionID, &sp.Source, &sp.FirstName, &sp.LastName, &sp.Bio, &sp.TagLine, &sp.ProfilePicture, &sp.IsTopSpeaker, &sp.CreatedAt, &sp.UpdatedAt); err != nil {
 			return nil, err
 		}
 		speakers = append(speakers, sp)

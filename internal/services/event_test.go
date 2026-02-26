@@ -1020,7 +1020,8 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 				}
 				assert.ElementsMatch(t, []string{"Conferencia", "ai"}, tagNames)
 				require.Len(t, sessionRepo.speakers, 1)
-				assert.Equal(t, "Jane Doe", sessionRepo.speakers[0].FullName)
+				assert.Equal(t, "Jane", sessionRepo.speakers[0].FirstName)
+				assert.Equal(t, "Doe", sessionRepo.speakers[0].LastName)
 				require.Len(t, sessionRepo.sessionSpeakers, 1)
 			},
 		},
@@ -2147,8 +2148,8 @@ func TestEventService_CreateEventSession(t *testing.T) {
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
 				sr.speakers = []*domain.Speaker{
-					{ID: "sp-1", EventID: "ev-1", FullName: "Alice"},
-					{ID: "sp-2", EventID: "ev-1", FullName: "Bob"},
+					{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""},
+					{ID: "sp-2", EventID: "ev-1", FirstName: "Bob", LastName: ""},
 				}
 				tr := newFakeTagRepo()
 				return er, sr, &fakeSessionizeFetcher{}, tr
@@ -2267,7 +2268,7 @@ func TestEventService_CreateEventSession(t *testing.T) {
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
 				sr.speakers = []*domain.Speaker{
-					{ID: "sp-1", EventID: "ev-other", FullName: "Alice"},
+					{ID: "sp-1", EventID: "ev-other", FirstName: "Alice", LastName: ""},
 				}
 				return er, sr, &fakeSessionizeFetcher{}, newFakeTagRepo()
 			},
@@ -2359,8 +2360,8 @@ func TestEventService_ListEventSpeakers(t *testing.T) {
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
 				sr.speakers = []*domain.Speaker{
-					{ID: "sp-1", EventID: "ev-1", FullName: "Alice"},
-					{ID: "sp-2", EventID: "ev-1", FullName: "Bob"},
+					{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""},
+					{ID: "sp-2", EventID: "ev-1", FirstName: "Bob", LastName: ""},
 				}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
@@ -2388,7 +2389,7 @@ func TestEventService_ListEventSpeakers(t *testing.T) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
-				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}}
+				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID:       "ev-1",
@@ -2456,7 +2457,7 @@ func TestEventService_GetEventSpeaker(t *testing.T) {
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: "ev-1", Name: "Room A"}}
 				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk", StartTime: time.Now(), EndTime: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}}
-				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}}
+				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""}}
 				sr.sessionSpeakers = []struct{ sessionID, speakerID string }{{"sess-1", "sp-1"}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
@@ -2466,7 +2467,8 @@ func TestEventService_GetEventSpeaker(t *testing.T) {
 			assert: func(t *testing.T, speaker *domain.Speaker, sessions []*domain.Session) {
 				require.NotNil(t, speaker)
 				assert.Equal(t, "sp-1", speaker.ID)
-				assert.Equal(t, "Alice", speaker.FullName)
+				assert.Equal(t, "Alice", speaker.FirstName)
+				assert.Empty(t, speaker.LastName)
 				require.Len(t, sessions, 1)
 				assert.Equal(t, "sess-1", sessions[0].ID)
 			},
@@ -2502,7 +2504,7 @@ func TestEventService_GetEventSpeaker(t *testing.T) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
-				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}}
+				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID:       "ev-1",
@@ -2517,7 +2519,7 @@ func TestEventService_GetEventSpeaker(t *testing.T) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
-				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-other", FullName: "Alice"}}
+				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-other", FirstName: "Alice", LastName: ""}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-1",
@@ -2571,7 +2573,7 @@ func TestEventService_DeleteEventSpeaker(t *testing.T) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
-				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}}
+				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID:       "ev-1",
@@ -2596,7 +2598,7 @@ func TestEventService_DeleteEventSpeaker(t *testing.T) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 				sr := newFakeSessionRepo()
-				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FullName: "Alice"}}
+				sr.speakers = []*domain.Speaker{{ID: "sp-1", EventID: "ev-1", FirstName: "Alice", LastName: ""}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID:       "ev-1",
@@ -2656,7 +2658,6 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 		ownerID        string
 		firstName      string
 		lastName       string
-		fullName       string
 		bio            string
 		tagLine        string
 		profilePicture string
@@ -2678,7 +2679,6 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 			ownerID:      "user-1",
 			firstName:    "Jane",
 			lastName:     "Doe",
-			fullName:     "Jane Doe",
 			bio:          "Bio",
 			isTopSpeaker: true,
 			assert: func(t *testing.T, speaker *domain.Speaker) {
@@ -2687,7 +2687,6 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 				assert.Equal(t, "ev-1", speaker.EventID)
 				assert.Equal(t, "Jane", speaker.FirstName)
 				assert.Equal(t, "Doe", speaker.LastName)
-				assert.Equal(t, "Jane Doe", speaker.FullName)
 				assert.True(t, strings.HasPrefix(speaker.SourceSessionID, "manual-"), "source_session_id should be manual-*")
 				assert.True(t, speaker.IsTopSpeaker)
 			},
@@ -2699,7 +2698,7 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 			},
 			eventID:      "ev-missing",
 			ownerID:      "user-1",
-			fullName:     "Alice",
+			firstName:    "Alice",
 			wantErr:      true,
 			wantNotFound: true,
 		},
@@ -2711,14 +2710,14 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 				sr := newFakeSessionRepo()
 				return er, sr, &fakeSessionizeFetcher{}
 			},
-			eventID:       "ev-1",
-			ownerID:       "user-2",
-			fullName:      "Alice",
-			wantErr:       true,
+			eventID:      "ev-1",
+			ownerID:      "user-2",
+			firstName:    "Alice",
+			wantErr:      true,
 			wantForbidden: true,
 		},
 		{
-			name: "full_name derived from first and last when empty",
+			name: "first and last name stored as provided",
 			setup: func() (domain.EventRepository, domain.SessionRepository, domain.SessionFetcher) {
 				er := newFakeEventRepo()
 				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
@@ -2729,10 +2728,10 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 			ownerID:   "user-1",
 			firstName: "John",
 			lastName:  "Smith",
-			fullName:  "",
 			assert: func(t *testing.T, speaker *domain.Speaker) {
 				require.NotNil(t, speaker)
-				assert.Equal(t, "John Smith", speaker.FullName)
+				assert.Equal(t, "John", speaker.FirstName)
+				assert.Equal(t, "Smith", speaker.LastName)
 			},
 		},
 	}
@@ -2740,7 +2739,7 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			eventRepo, sessionRepo, fetcher := tt.setup()
 			svc := NewEventService(eventRepo, sessionRepo, newFakeTagRepo(), newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), fetcher, timeout)
-			speaker, err := svc.CreateEventSpeaker(ctx, tt.eventID, tt.ownerID, tt.firstName, tt.lastName, tt.fullName, tt.bio, tt.tagLine, tt.profilePicture, tt.isTopSpeaker)
+			speaker, err := svc.CreateEventSpeaker(ctx, tt.eventID, tt.ownerID, tt.firstName, tt.lastName, tt.bio, tt.tagLine, tt.profilePicture, tt.isTopSpeaker)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.wantNotFound {
