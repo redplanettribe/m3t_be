@@ -215,7 +215,7 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	roomMap := make(map[int]string) // Sessionize room ID -> domain room ID
 	for _, room := range sessionData.Rooms {
 		now := time.Now()
-		r := domain.NewRoom(eventID, room.Name, room.ID, false, 0, "", "", now, now)
+		r := domain.NewRoom(eventID, room.Name, room.ID, "sessionize", false, 0, "", "", now, now)
 		if err := s.sessionRepo.CreateRoom(ctx, r); err != nil {
 			return fmt.Errorf("failed to create room %s: %w", room.Name, err)
 		}
@@ -234,7 +234,7 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 		}
 		tagNames := deriveTagsFromCategoryItems(sess.CategoryItems, categoryIDToName)
 		now := time.Now()
-		domainSess := domain.NewSession(domainRoomID, sess.ID, sess.Title, sess.Description, sess.StartsAt, sess.EndsAt, tagNames, now, now)
+		domainSess := domain.NewSession(domainRoomID, sess.ID, "sessionize", sess.Title, sess.Description, sess.StartsAt, sess.EndsAt, tagNames, now, now)
 		if err := s.sessionRepo.CreateSession(ctx, domainSess); err != nil {
 			return fmt.Errorf("failed to create session %s: %w", sess.Title, err)
 		}
@@ -259,7 +259,7 @@ func (s *eventService) ImportSessionizeData(ctx context.Context, eventID string,
 	speakerMap := make(map[string]string) // Sessionize speaker UUID -> domain speaker ID
 	for _, sp := range sessionData.Speakers {
 		now := time.Now()
-		domainSp := domain.NewSpeaker(eventID, sp.ID, sp.FirstName, sp.LastName, sp.FullName, sp.Bio, sp.TagLine, sp.ProfilePicture, sp.IsTopSpeaker, now, now)
+		domainSp := domain.NewSpeaker(eventID, sp.ID, "sessionize", sp.FirstName, sp.LastName, sp.FullName, sp.Bio, sp.TagLine, sp.ProfilePicture, sp.IsTopSpeaker, now, now)
 		if err := s.sessionRepo.CreateSpeaker(ctx, domainSp); err != nil {
 			return fmt.Errorf("failed to create speaker %s: %w", sp.FullName, err)
 		}
@@ -768,7 +768,7 @@ func (s *eventService) CreateEventSpeaker(ctx context.Context, eventID, ownerID 
 		fullName = strings.TrimSpace(firstName + " " + lastName)
 	}
 	now := time.Now()
-	speaker := domain.NewSpeaker(eventID, sessionizeSpeakerID, firstName, lastName, fullName, bio, tagLine, profilePicture, isTopSpeaker, now, now)
+	speaker := domain.NewSpeaker(eventID, sessionizeSpeakerID, "admin_app", firstName, lastName, fullName, bio, tagLine, profilePicture, isTopSpeaker, now, now)
 	if err := s.sessionRepo.CreateSpeaker(ctx, speaker); err != nil {
 		return nil, fmt.Errorf("create speaker: %w", err)
 	}

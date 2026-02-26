@@ -21,36 +21,36 @@ func NewSessionRepository(db *sql.DB) domain.SessionRepository {
 
 func (r *SessionRepository) CreateRoom(ctx context.Context, room *domain.Room) error {
 	query := `
-		INSERT INTO rooms (event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO rooms (event_id, name, source_session_id, source, not_bookable, capacity, description, how_to_get_there, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (event_id, source_session_id) DO UPDATE 
-		SET name = EXCLUDED.name, not_bookable = EXCLUDED.not_bookable, capacity = EXCLUDED.capacity, description = EXCLUDED.description, how_to_get_there = EXCLUDED.how_to_get_there, updated_at = EXCLUDED.updated_at
+		SET name = EXCLUDED.name, source = EXCLUDED.source, not_bookable = EXCLUDED.not_bookable, capacity = EXCLUDED.capacity, description = EXCLUDED.description, how_to_get_there = EXCLUDED.how_to_get_there, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
-	return r.DB.QueryRowContext(ctx, query, room.EventID, room.Name, room.SessionizeRoomID, room.NotBookable, room.Capacity, room.Description, room.HowToGetThere, room.CreatedAt, room.UpdatedAt).Scan(&room.ID)
+	return r.DB.QueryRowContext(ctx, query, room.EventID, room.Name, room.SourceSessionID, room.Source, room.NotBookable, room.Capacity, room.Description, room.HowToGetThere, room.CreatedAt, room.UpdatedAt).Scan(&room.ID)
 }
 
 func (r *SessionRepository) CreateSession(ctx context.Context, s *domain.Session) error {
 	query := `
-		INSERT INTO sessions (room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (room_id, sessionize_session_id) DO UPDATE 
-		SET title = EXCLUDED.title, start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, description = EXCLUDED.description, updated_at = EXCLUDED.updated_at
+		INSERT INTO sessions (room_id, source_session_id, source, title, start_time, end_time, description, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (room_id, source_session_id) DO UPDATE 
+		SET source = EXCLUDED.source, title = EXCLUDED.title, start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, description = EXCLUDED.description, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
-	return r.DB.QueryRowContext(ctx, query, s.RoomID, s.SourceSessionID, s.Title, s.StartTime, s.EndTime, s.Description, s.CreatedAt, s.UpdatedAt).Scan(&s.ID)
+	return r.DB.QueryRowContext(ctx, query, s.RoomID, s.SourceSessionID, s.Source, s.Title, s.StartTime, s.EndTime, s.Description, s.CreatedAt, s.UpdatedAt).Scan(&s.ID)
 }
 
 func (r *SessionRepository) CreateSpeaker(ctx context.Context, speaker *domain.Speaker) error {
 	query := `
-		INSERT INTO speakers (event_id, sessionize_speaker_id, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		ON CONFLICT (event_id, sessionize_speaker_id) DO UPDATE
-		SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, full_name = EXCLUDED.full_name, bio = EXCLUDED.bio, tag_line = EXCLUDED.tag_line, profile_picture = EXCLUDED.profile_picture, is_top_speaker = EXCLUDED.is_top_speaker, updated_at = EXCLUDED.updated_at
+		INSERT INTO speakers (event_id, source_session_id, source, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		ON CONFLICT (event_id, source_session_id) DO UPDATE
+		SET source = EXCLUDED.source, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, full_name = EXCLUDED.full_name, bio = EXCLUDED.bio, tag_line = EXCLUDED.tag_line, profile_picture = EXCLUDED.profile_picture, is_top_speaker = EXCLUDED.is_top_speaker, updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
 	return r.DB.QueryRowContext(ctx, query,
-		speaker.EventID, speaker.SessionizeSpeakerID, speaker.FirstName, speaker.LastName, speaker.FullName,
+		speaker.EventID, speaker.SourceSessionID, speaker.Source, speaker.FirstName, speaker.LastName, speaker.FullName,
 		speaker.Bio, speaker.TagLine, speaker.ProfilePicture, speaker.IsTopSpeaker, speaker.CreatedAt, speaker.UpdatedAt,
 	).Scan(&speaker.ID)
 }
@@ -75,12 +75,12 @@ func (r *SessionRepository) DeleteSpeakersByEventID(ctx context.Context, eventID
 
 func (r *SessionRepository) GetRoomByID(ctx context.Context, roomID string) (*domain.Room, error) {
 	query := `
-		SELECT id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		SELECT id, event_id, name, source_session_id, source, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 		FROM rooms
 		WHERE id = $1
 	`
 	room := &domain.Room{}
-	err := r.DB.QueryRowContext(ctx, query, roomID).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, roomID).Scan(&room.ID, &room.EventID, &room.Name, &room.SourceSessionID, &room.Source, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
@@ -92,7 +92,7 @@ func (r *SessionRepository) GetRoomByID(ctx context.Context, roomID string) (*do
 
 func (r *SessionRepository) ListRoomsByEventID(ctx context.Context, eventID string) ([]*domain.Room, error) {
 	query := `
-		SELECT id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		SELECT id, event_id, name, source_session_id, source, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 		FROM rooms
 		WHERE event_id = $1
 		ORDER BY name
@@ -105,7 +105,7 @@ func (r *SessionRepository) ListRoomsByEventID(ctx context.Context, eventID stri
 	var rooms []*domain.Room
 	for rows.Next() {
 		room := &domain.Room{}
-		if err := rows.Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt); err != nil {
+		if err := rows.Scan(&room.ID, &room.EventID, &room.Name, &room.SourceSessionID, &room.Source, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt); err != nil {
 			return nil, err
 		}
 		rooms = append(rooms, room)
@@ -118,10 +118,10 @@ func (r *SessionRepository) SetRoomNotBookable(ctx context.Context, roomID strin
 		UPDATE rooms
 		SET not_bookable = $2, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		RETURNING id, event_id, name, source_session_id, source, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 	`
 	room := &domain.Room{}
-	err := r.DB.QueryRowContext(ctx, query, roomID, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, roomID, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SourceSessionID, &room.Source, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
@@ -136,10 +136,10 @@ func (r *SessionRepository) UpdateRoomDetails(ctx context.Context, roomID string
 		UPDATE rooms
 		SET capacity = $2, description = $3, how_to_get_there = $4, not_bookable = $5, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, event_id, name, source_session_id, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
+		RETURNING id, event_id, name, source_session_id, source, not_bookable, capacity, description, how_to_get_there, created_at, updated_at
 	`
 	room := &domain.Room{}
-	err := r.DB.QueryRowContext(ctx, query, roomID, capacity, description, howToGetThere, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SessionizeRoomID, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, roomID, capacity, description, howToGetThere, notBookable).Scan(&room.ID, &room.EventID, &room.Name, &room.SourceSessionID, &room.Source, &room.NotBookable, &room.Capacity, &room.Description, &room.HowToGetThere, &room.CreatedAt, &room.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
@@ -175,7 +175,7 @@ func (r *SessionRepository) DeleteSession(ctx context.Context, sessionID string)
 
 func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string) (*domain.Session, error) {
 	query := `
-		SELECT id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+		SELECT id, room_id, source_session_id, source, title, start_time, end_time, description, created_at, updated_at
 		FROM sessions
 		WHERE id = $1
 	`
@@ -184,6 +184,7 @@ func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string
 		&sess.ID,
 		&sess.RoomID,
 		&sess.SourceSessionID,
+		&sess.Source,
 		&sess.Title,
 		&sess.StartTime,
 		&sess.EndTime,
@@ -226,7 +227,7 @@ func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string
 
 func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID string) ([]*domain.Session, error) {
 	query := `
-		SELECT s.id, s.room_id, s.sessionize_session_id, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at
+		SELECT s.id, s.room_id, s.source_session_id, s.source, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at
 		FROM sessions s
 		INNER JOIN rooms r ON r.id = s.room_id
 		WHERE r.event_id = $1
@@ -241,7 +242,7 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 	var sessionIDs []string
 	for rows.Next() {
 		sess := &domain.Session{}
-		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Source, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
 			return nil, err
 		}
 		sess.Tags = []string{}
@@ -305,7 +306,7 @@ func (r *SessionRepository) ListSpeakerIDsBySessionIDs(ctx context.Context, sess
 
 func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string) (*domain.Speaker, error) {
 	query := `
-		SELECT id, event_id, sessionize_speaker_id, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
+		SELECT id, event_id, source_session_id, source, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
 		FROM speakers
 		WHERE id = $1
 	`
@@ -313,7 +314,8 @@ func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string
 	err := r.DB.QueryRowContext(ctx, query, speakerID).Scan(
 		&sp.ID,
 		&sp.EventID,
-		&sp.SessionizeSpeakerID,
+		&sp.SourceSessionID,
+		&sp.Source,
 		&sp.FirstName,
 		&sp.LastName,
 		&sp.FullName,
@@ -335,7 +337,7 @@ func (r *SessionRepository) GetSpeakerByID(ctx context.Context, speakerID string
 
 func (r *SessionRepository) ListSpeakersByEventID(ctx context.Context, eventID string) ([]*domain.Speaker, error) {
 	query := `
-		SELECT id, event_id, sessionize_speaker_id, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
+		SELECT id, event_id, source_session_id, source, first_name, last_name, full_name, bio, tag_line, profile_picture, is_top_speaker, created_at, updated_at
 		FROM speakers
 		WHERE event_id = $1
 		ORDER BY full_name, id
@@ -348,7 +350,7 @@ func (r *SessionRepository) ListSpeakersByEventID(ctx context.Context, eventID s
 	var speakers []*domain.Speaker
 	for rows.Next() {
 		sp := &domain.Speaker{}
-		if err := rows.Scan(&sp.ID, &sp.EventID, &sp.SessionizeSpeakerID, &sp.FirstName, &sp.LastName, &sp.FullName, &sp.Bio, &sp.TagLine, &sp.ProfilePicture, &sp.IsTopSpeaker, &sp.CreatedAt, &sp.UpdatedAt); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.EventID, &sp.SourceSessionID, &sp.Source, &sp.FirstName, &sp.LastName, &sp.FullName, &sp.Bio, &sp.TagLine, &sp.ProfilePicture, &sp.IsTopSpeaker, &sp.CreatedAt, &sp.UpdatedAt); err != nil {
 			return nil, err
 		}
 		speakers = append(speakers, sp)
@@ -378,7 +380,7 @@ func (r *SessionRepository) ListSessionsByIDs(ctx context.Context, sessionIDs []
 		return []*domain.Session{}, nil
 	}
 	query := `
-		SELECT id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+		SELECT id, room_id, source_session_id, source, title, start_time, end_time, description, created_at, updated_at
 		FROM sessions
 		WHERE id = ANY($1)
 		ORDER BY start_time, id
@@ -391,7 +393,7 @@ func (r *SessionRepository) ListSessionsByIDs(ctx context.Context, sessionIDs []
 	var sessions []*domain.Session
 	for rows.Next() {
 		sess := &domain.Session{}
-		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Source, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
 			return nil, err
 		}
 		sess.Tags = []string{}
@@ -453,13 +455,14 @@ func (r *SessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID
 			end_time = COALESCE($4, end_time),
 			updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+		RETURNING id, room_id, source_session_id, source, title, start_time, end_time, description, created_at, updated_at
 	`
 	sess := &domain.Session{}
 	err := r.DB.QueryRowContext(ctx, query, sessionID, roomID, startTime, endTime).Scan(
 		&sess.ID,
 		&sess.RoomID,
 		&sess.SourceSessionID,
+		&sess.Source,
 		&sess.Title,
 		&sess.StartTime,
 		&sess.EndTime,
@@ -502,13 +505,14 @@ func (r *SessionRepository) UpdateSessionContent(ctx context.Context, sessionID 
 			description = COALESCE($3, description),
 			updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, room_id, sessionize_session_id, title, start_time, end_time, description, created_at, updated_at
+		RETURNING id, room_id, source_session_id, source, title, start_time, end_time, description, created_at, updated_at
 	`
 	sess := &domain.Session{}
 	err := r.DB.QueryRowContext(ctx, query, sessionID, title, description).Scan(
 		&sess.ID,
 		&sess.RoomID,
 		&sess.SourceSessionID,
+		&sess.Source,
 		&sess.Title,
 		&sess.StartTime,
 		&sess.EndTime,

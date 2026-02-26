@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "darkMode": true,
+  "darkMode": false,
   "gridEnabling": false,
   "detailLevel": "All",
   "tablePositions": [

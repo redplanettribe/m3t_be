@@ -8,31 +8,33 @@ import (
 // Room represents a physical room or track at the event
 // swagger:model Room
 type Room struct {
-	ID               string    `json:"id"`
-	EventID          string    `json:"event_id"`
-	Name             string    `json:"name"`
-	SessionizeRoomID int       `json:"source_session_id"`
-	NotBookable      bool      `json:"not_bookable"`
-	Capacity         int       `json:"capacity"`
-	Description      string    `json:"description"`
-	HowToGetThere    string    `json:"how_to_get_there"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	EventID         string    `json:"event_id"`
+	Name            string    `json:"name"`
+	SourceSessionID int       `json:"source_session_id"`
+	Source          string    `json:"source"`
+	NotBookable     bool      `json:"not_bookable"`
+	Capacity        int       `json:"capacity"`
+	Description     string    `json:"description"`
+	HowToGetThere   string    `json:"how_to_get_there"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // NewRoom returns a new Room with the given fields. ID is typically set by the repository on create.
 // capacity, description, and howToGetThere default to 0/empty for Session imports.
-func NewRoom(eventID, name string, sessionRoomID int, notBookable bool, capacity int, description, howToGetThere string, createdAt, updatedAt time.Time) *Room {
+func NewRoom(eventID, name string, sourceSessionID int, source string, notBookable bool, capacity int, description, howToGetThere string, createdAt, updatedAt time.Time) *Room {
 	return &Room{
-		EventID:          eventID,
-		Name:             name,
-		SessionizeRoomID: sessionRoomID,
-		NotBookable:      notBookable,
-		Capacity:         capacity,
-		Description:      description,
-		HowToGetThere:    howToGetThere,
-		CreatedAt:        createdAt,
-		UpdatedAt:        updatedAt,
+		EventID:         eventID,
+		Name:            name,
+		SourceSessionID: sourceSessionID,
+		Source:          source,
+		NotBookable:     notBookable,
+		Capacity:        capacity,
+		Description:     description,
+		HowToGetThere:   howToGetThere,
+		CreatedAt:       createdAt,
+		UpdatedAt:       updatedAt,
 	}
 }
 
@@ -42,6 +44,7 @@ type Session struct {
 	ID              string    `json:"id"`
 	RoomID          string    `json:"room_id"`
 	SourceSessionID string    `json:"source_session_id"`
+	Source          string    `json:"source"`
 	Title           string    `json:"title"`
 	StartTime       time.Time `json:"start_time"`
 	EndTime         time.Time `json:"end_time"`
@@ -54,13 +57,14 @@ type Session struct {
 
 // NewSession returns a new Session with the given fields. ID is typically set by the repository on create.
 // tags may be nil or empty; the repository will store them in session_tags.
-func NewSession(roomID, sessionizeSessionID, title, description string, startTime, endTime time.Time, tags []string, createdAt, updatedAt time.Time) *Session {
+func NewSession(roomID, sourceSessionID, source, title, description string, startTime, endTime time.Time, tags []string, createdAt, updatedAt time.Time) *Session {
 	if tags == nil {
 		tags = []string{}
 	}
 	return &Session{
 		RoomID:          roomID,
-		SourceSessionID: sessionizeSessionID,
+		SourceSessionID: sourceSessionID,
+		Source:          source,
 		Title:           title,
 		StartTime:       startTime,
 		EndTime:         endTime,

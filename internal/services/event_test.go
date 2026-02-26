@@ -2225,7 +2225,7 @@ func TestEventService_CreateEventSpeaker(t *testing.T) {
 				assert.Equal(t, "Jane", speaker.FirstName)
 				assert.Equal(t, "Doe", speaker.LastName)
 				assert.Equal(t, "Jane Doe", speaker.FullName)
-				assert.True(t, strings.HasPrefix(speaker.SessionizeSpeakerID, "manual-"), "sessionize_speaker_id should be manual-*")
+				assert.True(t, strings.HasPrefix(speaker.SourceSessionID, "manual-"), "source_session_id should be manual-*")
 				assert.True(t, speaker.IsTopSpeaker)
 			},
 		},
