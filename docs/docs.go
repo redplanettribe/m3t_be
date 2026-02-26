@@ -3074,9 +3074,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tags": {
+                    "description": "Tags are the tags associated with this session. Each tag includes both its ID and name.",
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/domain.Tag"
                     }
                 },
                 "title": {

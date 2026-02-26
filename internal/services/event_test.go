@@ -947,7 +947,11 @@ func TestEventService_ImportSessionizeData(t *testing.T) {
 				assert.Equal(t, "Room A", sessionRepo.rooms[0].Name)
 				require.Len(t, sessionRepo.sessions, 1)
 				assert.Equal(t, "Talk 1", sessionRepo.sessions[0].Title)
-				assert.ElementsMatch(t, []string{"Conferencia", "ai"}, sessionRepo.sessions[0].Tags)
+				var tagNames []string
+				for _, tg := range sessionRepo.sessions[0].Tags {
+					tagNames = append(tagNames, tg.Name)
+				}
+				assert.ElementsMatch(t, []string{"Conferencia", "ai"}, tagNames)
 				require.Len(t, sessionRepo.speakers, 1)
 				assert.Equal(t, "Jane Doe", sessionRepo.speakers[0].FullName)
 				require.Len(t, sessionRepo.sessionSpeakers, 1)
@@ -1092,7 +1096,7 @@ func TestEventService_GetEventByID(t *testing.T) {
 				ev, _ := er.GetByID(ctx, "ev-1")
 				sr := newFakeSessionRepo()
 				sr.rooms = []*domain.Room{{ID: "room-1", EventID: ev.ID, Name: "Room A"}}
-				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []string{}}}
+				sr.sessions = []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []*domain.Tag{}}}
 				return er, sr, &fakeSessionizeFetcher{}
 			},
 			eventID:      "ev-1",

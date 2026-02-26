@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -49,17 +50,24 @@ type Session struct {
 	StartTime       time.Time `json:"start_time"`
 	EndTime         time.Time `json:"end_time"`
 	Description     string    `json:"description"`
-	Tags            []string  `json:"tags"`
-	SpeakerIDs      []string  `json:"speaker_ids"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	// Tags are the tags associated with this session. Each tag includes both its ID and name.
+	Tags       []*Tag   `json:"tags"`
+	SpeakerIDs []string `json:"speaker_ids"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // NewSession returns a new Session with the given fields. ID is typically set by the repository on create.
-// tags may be nil or empty; the repository will store them in session_tags.
+// Tag names may be provided; the repository and tag repository are responsible for persisting tag links and
+// hydrating full Tag objects (including IDs) when sessions are loaded from the database.
 func NewSession(roomID, sourceSessionID, source, title, description string, startTime, endTime time.Time, tags []string, createdAt, updatedAt time.Time) *Session {
-	if tags == nil {
-		tags = []string{}
+	var tagObjs []*Tag
+	for _, name := range tags {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		tagObjs = append(tagObjs, &Tag{Name: name})
 	}
 	return &Session{
 		RoomID:          roomID,
@@ -69,7 +77,7 @@ func NewSession(roomID, sourceSessionID, source, title, description string, star
 		StartTime:       startTime,
 		EndTime:         endTime,
 		Description:     description,
-		Tags:            tags,
+		Tags:            tagObjs,
 		SpeakerIDs:      []string{},
 		CreatedAt:       createdAt,
 		UpdatedAt:       updatedAt,

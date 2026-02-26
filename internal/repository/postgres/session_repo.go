@@ -198,18 +198,18 @@ func (r *SessionRepository) GetSessionByID(ctx context.Context, sessionID string
 		}
 		return nil, err
 	}
-	sess.Tags = []string{}
-	rows, err := r.DB.QueryContext(ctx, `SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = $1`, sessionID)
+	sess.Tags = []*domain.Tag{}
+	rows, err := r.DB.QueryContext(ctx, `SELECT t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = $1`, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
+		var tagID, tagName string
+		if err := rows.Scan(&tagID, &tagName); err != nil {
 			return nil, err
 		}
-		sess.Tags = append(sess.Tags, tag)
+		sess.Tags = append(sess.Tags, &domain.Tag{ID: tagID, Name: tagName})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -245,7 +245,7 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Source, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
 			return nil, err
 		}
-		sess.Tags = []string{}
+		sess.Tags = []*domain.Tag{}
 		sess.SpeakerIDs = []string{}
 		sessions = append(sessions, sess)
 		sessionIDs = append(sessionIDs, sess.ID)
@@ -256,18 +256,18 @@ func (r *SessionRepository) ListSessionsByEventID(ctx context.Context, eventID s
 	if len(sessionIDs) == 0 {
 		return sessions, nil
 	}
-	tagRows, err := r.DB.QueryContext(ctx, `SELECT st.session_id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY($1)`, pq.Array(sessionIDs))
+	tagRows, err := r.DB.QueryContext(ctx, `SELECT st.session_id, t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY($1)`, pq.Array(sessionIDs))
 	if err != nil {
 		return nil, err
 	}
 	defer tagRows.Close()
-	tagsBySession := make(map[string][]string)
+	tagsBySession := make(map[string][]*domain.Tag)
 	for tagRows.Next() {
-		var sid, tag string
-		if err := tagRows.Scan(&sid, &tag); err != nil {
+		var sid, tagID, tagName string
+		if err := tagRows.Scan(&sid, &tagID, &tagName); err != nil {
 			return nil, err
 		}
-		tagsBySession[sid] = append(tagsBySession[sid], tag)
+		tagsBySession[sid] = append(tagsBySession[sid], &domain.Tag{ID: tagID, Name: tagName})
 	}
 	if err := tagRows.Err(); err != nil {
 		return nil, err
@@ -396,25 +396,25 @@ func (r *SessionRepository) ListSessionsByIDs(ctx context.Context, sessionIDs []
 		if err := rows.Scan(&sess.ID, &sess.RoomID, &sess.SourceSessionID, &sess.Source, &sess.Title, &sess.StartTime, &sess.EndTime, &sess.Description, &sess.CreatedAt, &sess.UpdatedAt); err != nil {
 			return nil, err
 		}
-		sess.Tags = []string{}
+		sess.Tags = []*domain.Tag{}
 		sess.SpeakerIDs = []string{}
 		sessions = append(sessions, sess)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	tagRows, err := r.DB.QueryContext(ctx, `SELECT st.session_id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY($1)`, pq.Array(sessionIDs))
+	tagRows, err := r.DB.QueryContext(ctx, `SELECT st.session_id, t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY($1)`, pq.Array(sessionIDs))
 	if err != nil {
 		return nil, err
 	}
 	defer tagRows.Close()
-	tagsBySession := make(map[string][]string)
+	tagsBySession := make(map[string][]*domain.Tag)
 	for tagRows.Next() {
-		var sid, tag string
-		if err := tagRows.Scan(&sid, &tag); err != nil {
+		var sid, tagID, tagName string
+		if err := tagRows.Scan(&sid, &tagID, &tagName); err != nil {
 			return nil, err
 		}
-		tagsBySession[sid] = append(tagsBySession[sid], tag)
+		tagsBySession[sid] = append(tagsBySession[sid], &domain.Tag{ID: tagID, Name: tagName})
 	}
 	if err := tagRows.Err(); err != nil {
 		return nil, err
@@ -477,18 +477,18 @@ func (r *SessionRepository) UpdateSessionSchedule(ctx context.Context, sessionID
 		return nil, err
 	}
 
-	sess.Tags = []string{}
-	rows, err := r.DB.QueryContext(ctx, `SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = $1`, sessionID)
+	sess.Tags = []*domain.Tag{}
+	rows, err := r.DB.QueryContext(ctx, `SELECT t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = $1`, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
+		var tagID, tagName string
+		if err := rows.Scan(&tagID, &tagName); err != nil {
 			return nil, err
 		}
-		sess.Tags = append(sess.Tags, tag)
+		sess.Tags = append(sess.Tags, &domain.Tag{ID: tagID, Name: tagName})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -527,18 +527,18 @@ func (r *SessionRepository) UpdateSessionContent(ctx context.Context, sessionID 
 		return nil, err
 	}
 
-	sess.Tags = []string{}
-	rows, err := r.DB.QueryContext(ctx, `SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = $1`, sessionID)
+	sess.Tags = []*domain.Tag{}
+	rows, err := r.DB.QueryContext(ctx, `SELECT t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = $1`, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
+		var tagID, tagName string
+		if err := rows.Scan(&tagID, &tagName); err != nil {
 			return nil, err
 		}
-		sess.Tags = append(sess.Tags, tag)
+		sess.Tags = append(sess.Tags, &domain.Tag{ID: tagID, Name: tagName})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

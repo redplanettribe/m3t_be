@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -444,6 +445,14 @@ func (f *fakeEventService) CreateEventSession(ctx context.Context, eventID, owne
 	if f.createEventSessionResult != nil {
 		return f.createEventSessionResult, nil
 	}
+	var tags []*domain.Tag
+	for _, name := range tagNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		tags = append(tags, &domain.Tag{Name: name})
+	}
 	return &domain.Session{
 		ID:          "sess-created",
 		RoomID:      roomID,
@@ -451,7 +460,7 @@ func (f *fakeEventService) CreateEventSession(ctx context.Context, eventID, owne
 		Description: description,
 		StartTime:   startTime,
 		EndTime:     endTime,
-		Tags:        append([]string(nil), tagNames...),
+		Tags:        tags,
 		SpeakerIDs:  append([]string(nil), speakerIDs...),
 	}, nil
 }
@@ -750,7 +759,7 @@ func TestScheduleController_GetEventByID(t *testing.T) {
 				"ev-123": {
 					event:    &domain.Event{ID: "ev-123", Name: "Conf 2025", OwnerID: "user-1"},
 					rooms:    []*domain.Room{{ID: "room-1", EventID: "ev-123", Name: "Room A"}},
-					sessions: []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []string{}}},
+					sessions: []*domain.Session{{ID: "sess-1", RoomID: "room-1", Title: "Talk 1", Tags: []*domain.Tag{}}},
 				},
 			},
 			wantStatus:     http.StatusOK,
@@ -1957,7 +1966,7 @@ func TestScheduleController_CreateEventSession(t *testing.T) {
 				Description: "Desc",
 				StartTime:   start,
 				EndTime:     end,
-				Tags:        []string{"go", "conf"},
+				Tags:        []*domain.Tag{{ID: "tag-go", Name: "go"}, {ID: "tag-conf", Name: "conf"}},
 				SpeakerIDs:  []string{"sp-1", "sp-2"},
 			},
 			wantStatus: http.StatusCreated,

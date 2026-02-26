@@ -115,7 +115,7 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				StartTime:       startTime,
 				EndTime:         endTime,
 				Description:     "A talk",
-				Tags:            []string{},
+				Tags:            []*domain.Tag{},
 				CreatedAt:       createdAt,
 				UpdatedAt:       updatedAt,
 			},
@@ -137,7 +137,7 @@ func TestSessionRepository_CreateSession(t *testing.T) {
 				StartTime:       startTime,
 				EndTime:         endTime,
 				Description:     "",
-				Tags:            []string{"ai", "web"},
+				Tags:            []*domain.Tag{{Name: "ai"}, {Name: "web"}},
 				CreatedAt:       createdAt,
 				UpdatedAt:       updatedAt,
 			},
@@ -712,10 +712,10 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 				mock.ExpectQuery(`SELECT s.id, s.room_id, s.source_session_id, s.source, s.title, s.start_time, s.end_time, s.description, s.created_at, s.updated_at`).
 					WithArgs("ev-1").
 					WillReturnRows(rows)
-				tagRows := sqlmock.NewRows([]string{"session_id", "name"}).
-					AddRow("sess-1", "ai").
-					AddRow("sess-1", "web")
-				mock.ExpectQuery(`SELECT st.session_id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY`).
+				tagRows := sqlmock.NewRows([]string{"session_id", "id", "name"}).
+					AddRow("sess-1", "tag-ai", "ai").
+					AddRow("sess-1", "tag-web", "web")
+				mock.ExpectQuery(`SELECT st.session_id, t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id = ANY`).
 					WithArgs(pq.Array([]string{"sess-1"})).
 					WillReturnRows(tagRows)
 			},
@@ -762,7 +762,11 @@ func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, sessions, tt.wantLen)
 			if tt.wantFirstSessionTags != nil && len(sessions) > 0 {
-				require.ElementsMatch(t, tt.wantFirstSessionTags, sessions[0].Tags)
+				var gotNames []string
+				for _, tg := range sessions[0].Tags {
+					gotNames = append(gotNames, tg.Name)
+				}
+				require.ElementsMatch(t, tt.wantFirstSessionTags, gotNames)
 			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
@@ -798,9 +802,9 @@ func TestSessionRepository_UpdateSessionContent(t *testing.T) {
 				mock.ExpectQuery(`UPDATE sessions`).
 					WithArgs("sess-1", "New Title", "New description").
 					WillReturnRows(rows)
-				mock.ExpectQuery(`SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
+				mock.ExpectQuery(`SELECT t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
 					WithArgs("sess-1").
-					WillReturnRows(sqlmock.NewRows([]string{"name"}))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "name"}))
 			},
 			wantTitle: "New Title",
 			wantDesc:  "New description",
@@ -815,9 +819,9 @@ func TestSessionRepository_UpdateSessionContent(t *testing.T) {
 				mock.ExpectQuery(`UPDATE sessions`).
 					WithArgs("sess-1", "Only Title", nil).
 					WillReturnRows(rows)
-				mock.ExpectQuery(`SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
+				mock.ExpectQuery(`SELECT t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
 					WithArgs("sess-1").
-					WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("ai").AddRow("web"))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow("tag-ai", "ai").AddRow("tag-web", "web"))
 			},
 			wantTitle: "Only Title",
 			wantDesc:  "unchanged",
@@ -832,9 +836,9 @@ func TestSessionRepository_UpdateSessionContent(t *testing.T) {
 				mock.ExpectQuery(`UPDATE sessions`).
 					WithArgs("sess-1", nil, "Only description").
 					WillReturnRows(rows)
-				mock.ExpectQuery(`SELECT t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
+				mock.ExpectQuery(`SELECT t.id, t.name FROM session_tags st JOIN tags t ON t.id = st.tag_id WHERE st.session_id`).
 					WithArgs("sess-1").
-					WillReturnRows(sqlmock.NewRows([]string{"name"}))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "name"}))
 			},
 			wantTitle: "Old Title",
 			wantDesc:  "Only description",
