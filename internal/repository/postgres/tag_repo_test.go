@@ -309,6 +309,79 @@ func TestTagRepository_RemoveSessionTag(t *testing.T) {
 	}
 }
 
+func TestTagRepository_RemoveEventTag(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		eventID string
+		tagID   string
+		mock    func(mock sqlmock.Sqlmock)
+		wantErr bool
+		errIs   error
+	}{
+		{
+			name:    "success deletes session_tags then event_tags",
+			eventID: "ev-1",
+			tagID:   "tag-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM session_tags WHERE tag_id = \$1 AND session_id IN`).
+					WithArgs("tag-1", "ev-1").
+					WillReturnResult(sqlmock.NewResult(0, 2))
+				mock.ExpectExec(`DELETE FROM event_tags WHERE event_id = \$1 AND tag_id = \$2`).
+					WithArgs("ev-1", "tag-1").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:    "tag not on event returns ErrNotFound",
+			eventID: "ev-1",
+			tagID:   "tag-999",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM session_tags WHERE tag_id = \$1 AND session_id IN`).
+					WithArgs("tag-999", "ev-1").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectExec(`DELETE FROM event_tags WHERE event_id = \$1 AND tag_id = \$2`).
+					WithArgs("ev-1", "tag-999").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+			},
+			wantErr: true,
+			errIs:   domain.ErrNotFound,
+		},
+		{
+			name:    "first delete db error",
+			eventID: "ev-1",
+			tagID:   "tag-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM session_tags WHERE tag_id = \$1 AND session_id IN`).
+					WithArgs("tag-1", "ev-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewTagRepository(db)
+			err = repo.RemoveEventTag(ctx, tt.eventID, tt.tagID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errIs != nil {
+					require.ErrorIs(t, err, tt.errIs)
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestTagRepository_UpdateTagName(t *testing.T) {
 	ctx := context.Background()
 

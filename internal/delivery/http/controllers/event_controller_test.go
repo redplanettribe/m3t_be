@@ -170,6 +170,11 @@ type fakeEventService struct {
 	lastRemoveSessionTagSessionID string
 	lastRemoveSessionTagOwnerID   string
 	lastRemoveSessionTagTagID    string
+	// RemoveEventTag
+	removeEventTagErr         error
+	lastRemoveEventTagEventID string
+	lastRemoveEventTagOwnerID string
+	lastRemoveEventTagTagID   string
 	// CreateEventSession
 	createEventSessionErr          error
 	createEventSessionResult       *domain.Session
@@ -408,6 +413,13 @@ func (f *fakeEventService) RemoveSessionTag(ctx context.Context, eventID, sessio
 	f.lastRemoveSessionTagOwnerID = ownerID
 	f.lastRemoveSessionTagTagID = tagID
 	return f.removeSessionTagErr
+}
+
+func (f *fakeEventService) RemoveEventTag(ctx context.Context, eventID, ownerID, tagID string) error {
+	f.lastRemoveEventTagEventID = eventID
+	f.lastRemoveEventTagOwnerID = ownerID
+	f.lastRemoveEventTagTagID = tagID
+	return f.removeEventTagErr
 }
 
 func (f *fakeEventService) UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*domain.Tag, error) {
@@ -1940,6 +1952,104 @@ func TestScheduleController_RemoveSessionTag(t *testing.T) {
 			}
 			rr := httptest.NewRecorder()
 			ctrl.RemoveSessionTag(rr, req)
+			require.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantStatus == http.StatusNoContent {
+				if tt.checkCall != nil {
+					tt.checkCall(t, fake)
+				}
+				return
+			}
+			var envelope helpers.APIResponse
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&envelope))
+			if tt.wantBodySubstr != "" && envelope.Error != nil {
+				assert.Contains(t, envelope.Error.Message, tt.wantBodySubstr)
+			}
+		})
+	}
+}
+
+func TestScheduleController_RemoveEventTag(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventID        string
+		tagID          string
+		noUserContext  bool
+		fakeErr        error
+		wantStatus     int
+		wantBodySubstr string
+		checkCall      func(t *testing.T, fake *fakeEventService)
+	}{
+		{
+			name:       "success",
+			eventID:    "ev-1",
+			tagID:      "tag-1",
+			wantStatus: http.StatusNoContent,
+			checkCall: func(t *testing.T, fake *fakeEventService) {
+				assert.Equal(t, "ev-1", fake.lastRemoveEventTagEventID)
+				assert.Equal(t, "user-123", fake.lastRemoveEventTagOwnerID)
+				assert.Equal(t, "tag-1", fake.lastRemoveEventTagTagID)
+			},
+		},
+		{
+			name:           "missing eventID",
+			eventID:        "",
+			tagID:          "tag-1",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or tagID",
+		},
+		{
+			name:           "missing tagID",
+			eventID:        "ev-1",
+			tagID:          "",
+			wantStatus:     http.StatusBadRequest,
+			wantBodySubstr: "missing eventID or tagID",
+		},
+		{
+			name:           "no user in context",
+			eventID:        "ev-1",
+			tagID:          "tag-1",
+			noUserContext:  true,
+			wantStatus:     http.StatusUnauthorized,
+			wantBodySubstr: "unauthorized",
+		},
+		{
+			name:           "event or tag not found",
+			eventID:        "ev-missing",
+			tagID:          "tag-1",
+			fakeErr:        domain.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+			wantBodySubstr: "not found",
+		},
+		{
+			name:           "forbidden",
+			eventID:        "ev-1",
+			tagID:          "tag-1",
+			fakeErr:        domain.ErrForbidden,
+			wantStatus:     http.StatusForbidden,
+			wantBodySubstr: "forbidden",
+		},
+		{
+			name:           "internal error",
+			eventID:        "ev-1",
+			tagID:          "tag-1",
+			fakeErr:        errors.New("db error"),
+			wantStatus:     http.StatusInternalServerError,
+			wantBodySubstr: "db error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventService{removeEventTagErr: tt.fakeErr}
+			ctrl := NewScheduleController(testLogger, fake)
+			path := fmt.Sprintf("http://test/events/%s/tags/%s", tt.eventID, tt.tagID)
+			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			req.SetPathValue("eventID", tt.eventID)
+			req.SetPathValue("tagID", tt.tagID)
+			if !tt.noUserContext {
+				req = req.WithContext(middleware.SetUserID(req.Context(), "user-123"))
+			}
+			rr := httptest.NewRecorder()
+			ctrl.RemoveEventTag(rr, req)
 			require.Equal(t, tt.wantStatus, rr.Code)
 			if tt.wantStatus == http.StatusNoContent {
 				if tt.checkCall != nil {

@@ -1172,6 +1172,29 @@ func (s *eventService) RemoveSessionTag(ctx context.Context, eventID, sessionID,
 	return nil
 }
 
+func (s *eventService) RemoveEventTag(ctx context.Context, eventID, ownerID, tagID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	if err := s.tagRepo.RemoveEventTag(ctx, eventID, tagID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("remove event tag: %w", err)
+	}
+	return nil
+}
+
 func (s *eventService) UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*domain.Tag, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()

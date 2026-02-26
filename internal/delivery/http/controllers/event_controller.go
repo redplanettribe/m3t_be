@@ -1697,6 +1697,50 @@ func (c *ScheduleController) UpdateEventTag(w http.ResponseWriter, r *http.Reque
 	helpers.WriteJSONSuccess(w, http.StatusOK, tag)
 }
 
+// RemoveEventTag godoc
+// @Summary Remove a tag from an event
+// @Description Removes the tag from the event and from all sessions of that event. Only the event owner can remove. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param tagID path string true "Tag ID (UUID)"
+// @Success 204 "No content"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/tags/{tagID} [delete]
+func (c *ScheduleController) RemoveEventTag(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	tagID := r.PathValue("tagID")
+	if eventID == "" || tagID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or tagID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	err := c.Service.RemoveEventTag(r.Context(), eventID, ownerID, tagID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or tag not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // AddSessionTagRequest is the request body for POST /events/{eventID}/sessions/{sessionID}/tags.
 type AddSessionTagRequest struct {
 	TagID string `json:"tag_id"`

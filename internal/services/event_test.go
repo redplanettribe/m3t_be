@@ -436,11 +436,12 @@ func (f *fakeSessionRepo) UpdateSessionContent(ctx context.Context, sessionID st
 
 // fakeTagRepo is an in-memory TagRepository for tests.
 type fakeTagRepo struct {
-	byName      map[string]string // tag name -> tag ID
-	byID       map[string]string  // tag ID -> tag name
-	eventTags   map[string]map[string]bool
-	sessionTags map[string][]string
-	nextID      int
+	byName           map[string]string // tag name -> tag ID
+	byID             map[string]string // tag ID -> tag name
+	eventTags        map[string]map[string]bool
+	sessionTags      map[string][]string
+	nextID           int
+	removeEventTagErr error // if set, RemoveEventTag returns this
 }
 
 func newFakeTagRepo() *fakeTagRepo {
@@ -507,6 +508,26 @@ func (f *fakeTagRepo) RemoveSessionTag(ctx context.Context, sessionID, tagID str
 		}
 	}
 	f.sessionTags[sessionID] = newSlice
+	return nil
+}
+
+func (f *fakeTagRepo) RemoveEventTag(ctx context.Context, eventID, tagID string) error {
+	if f.removeEventTagErr != nil {
+		return f.removeEventTagErr
+	}
+	if f.eventTags[eventID] == nil || !f.eventTags[eventID][tagID] {
+		return domain.ErrNotFound
+	}
+	delete(f.eventTags[eventID], tagID)
+	for sessionID := range f.sessionTags {
+		var newSlice []string
+		for _, id := range f.sessionTags[sessionID] {
+			if id != tagID {
+				newSlice = append(newSlice, id)
+			}
+		}
+		f.sessionTags[sessionID] = newSlice
+	}
 	return nil
 }
 
@@ -4129,6 +4150,122 @@ func TestEventService_RemoveSessionTag(t *testing.T) {
 			require.NoError(t, err)
 			if tt.name == "success removes tag" {
 				require.NotContains(t, tr.sessionTags["sess-1"], "tag-1")
+			}
+		})
+	}
+}
+
+func TestEventService_RemoveEventTag(t *testing.T) {
+	ctx := context.Background()
+	timeout := 5 * time.Second
+
+	tests := []struct {
+		name          string
+		setup         func() (domain.EventRepository, *fakeTagRepo)
+		eventID       string
+		tagID         string
+		ownerID       string
+		wantErr       bool
+		wantForbidden bool
+		wantNotFound  bool
+		assert        func(t *testing.T, tr *fakeTagRepo)
+	}{
+		{
+			name: "success removes tag from event and sessions",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Rust")
+				tr.sessionTags["sess-1"] = []string{"tag-1", "tag-2"}
+				return er, tr
+			},
+			eventID: "ev-1",
+			tagID:   "tag-1",
+			ownerID: "user-1",
+			assert: func(t *testing.T, tr *fakeTagRepo) {
+				require.False(t, tr.eventTags["ev-1"]["tag-1"])
+				require.NotContains(t, tr.sessionTags["sess-1"], "tag-1")
+			},
+		},
+		{
+			name: "event not found",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				return newFakeEventRepo(), newFakeTagRepo()
+			},
+			eventID:      "ev-missing",
+			tagID:        "tag-1",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "forbidden not owner",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				return er, tr
+			},
+			eventID:       "ev-1",
+			tagID:         "tag-1",
+			ownerID:       "user-2",
+			wantErr:       true,
+			wantForbidden: true,
+		},
+		{
+			name: "tag not on event",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				tr.byID["tag-999"] = "Other"
+				tr.byName["Other"] = "tag-999"
+				return er, tr
+			},
+			eventID:      "ev-1",
+			tagID:        "tag-999",
+			ownerID:      "user-1",
+			wantErr:      true,
+			wantNotFound: true,
+		},
+		{
+			name: "repo error",
+			setup: func() (domain.EventRepository, *fakeTagRepo) {
+				er := newFakeEventRepo()
+				_ = er.Create(ctx, &domain.Event{Name: "Conf", OwnerID: "user-1", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+				tr := newFakeTagRepo()
+				_, _ = tr.EnsureTagForEvent(ctx, "ev-1", "Go")
+				tr.removeEventTagErr = errors.New("db error")
+				return er, tr
+			},
+			eventID: "ev-1",
+			tagID:   "tag-1",
+			ownerID: "user-1",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			er, tr := tt.setup()
+			svc := NewEventService(er, newFakeSessionRepo(), tr, newFakeEventTeamMemberRepo(), newFakeUserRepoForSchedule(), newFakeEventInvitationRepo(), newFakeEmailService(), &fakeSessionizeFetcher{}, timeout)
+			err := svc.RemoveEventTag(ctx, tt.eventID, tt.ownerID, tt.tagID)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantNotFound {
+					require.True(t, errors.Is(err, domain.ErrNotFound))
+				}
+				if tt.wantForbidden {
+					require.True(t, errors.Is(err, domain.ErrForbidden))
+				}
+				return
+			}
+			require.NoError(t, err)
+			if tt.assert != nil {
+				tt.assert(t, tr)
 			}
 		})
 	}

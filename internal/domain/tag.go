@@ -21,6 +21,8 @@ type TagRepository interface {
 	AddSessionTag(ctx context.Context, sessionID, tagID string) error
 	// RemoveSessionTag unlinks a tag from a session.
 	RemoveSessionTag(ctx context.Context, sessionID, tagID string) error
+	// RemoveEventTag removes the tag from the event and from all sessions of that event. Returns ErrNotFound if the tag was not linked to the event.
+	RemoveEventTag(ctx context.Context, eventID, tagID string) error
 	// UpdateTagName updates the tag name by ID. Returns ErrNotFound if tag does not exist.
 	UpdateTagName(ctx context.Context, tagID, name string) error
 	// GetTagByID returns the tag by ID, or ErrNotFound if not found.

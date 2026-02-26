@@ -39,6 +39,7 @@ func NewRouter(
 	mux.HandleFunc("GET /events/{eventID}/tags", requireAuth(scheduleController.ListEventTags))
 	mux.HandleFunc("POST /events/{eventID}/tags", requireAuth(scheduleController.AddEventTags))
 	mux.HandleFunc("PATCH /events/{eventID}/tags/{tagID}", requireAuth(scheduleController.UpdateEventTag))
+	mux.HandleFunc("DELETE /events/{eventID}/tags/{tagID}", requireAuth(scheduleController.RemoveEventTag))
 	mux.HandleFunc("POST /events/{eventID}/sessions/{sessionID}/tags", requireAuth(scheduleController.AddSessionTag))
 	mux.HandleFunc("DELETE /events/{eventID}/sessions/{sessionID}/tags/{tagID}", requireAuth(scheduleController.RemoveSessionTag))
 	mux.HandleFunc("POST /events/{eventID}/sessions", requireAuth(scheduleController.CreateEventSession))

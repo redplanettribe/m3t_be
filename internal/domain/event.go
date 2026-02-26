@@ -71,6 +71,7 @@ type EventService interface {
 	AddSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error
 	RemoveSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error
 	UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*Tag, error)
+	RemoveEventTag(ctx context.Context, eventID, ownerID, tagID string) error
 }
 
 // EventRepository defines the interface for event storage

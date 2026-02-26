@@ -85,6 +85,24 @@ func (r *tagRepository) RemoveSessionTag(ctx context.Context, sessionID, tagID s
 	return err
 }
 
+func (r *tagRepository) RemoveEventTag(ctx context.Context, eventID, tagID string) error {
+	_, err := r.DB.ExecContext(ctx,
+		`DELETE FROM session_tags WHERE tag_id = $1 AND session_id IN (SELECT s.id FROM sessions s JOIN rooms r ON s.room_id = r.id WHERE r.event_id = $2)`,
+		tagID, eventID)
+	if err != nil {
+		return err
+	}
+	result, err := r.DB.ExecContext(ctx, `DELETE FROM event_tags WHERE event_id = $1 AND tag_id = $2`, eventID, tagID)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (r *tagRepository) UpdateTagName(ctx context.Context, tagID, name string) error {
 	result, err := r.DB.ExecContext(ctx, `UPDATE tags SET name = $2 WHERE id = $1`, tagID, name)
 	if err != nil {
