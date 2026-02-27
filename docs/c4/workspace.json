@@ -1,0 +1,677 @@
+{
+  "configuration" : { },
+  "description" : "C4 model for event booking, scheduling, and check-in management.",
+  "documentation" : { },
+  "id" : 1,
+  "lastModifiedAgent" : "structurizr-ui",
+  "lastModifiedDate" : "2026-02-27T01:31:06Z",
+  "model" : {
+    "people" : [ {
+      "description" : "A person attending the multitrack event.",
+      "id" : "1",
+      "name" : "Event Attendee",
+      "properties" : {
+        "structurizr.dsl.identifier" : "attendee"
+      },
+      "relationships" : [ {
+        "description" : "Views availability and books sessions",
+        "destinationId" : "3",
+        "id" : "22",
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses",
+        "destinationId" : "4",
+        "id" : "24",
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Person"
+    }, {
+      "description" : "Staff member managing the event logistics.",
+      "id" : "2",
+      "name" : "Event Organizer",
+      "properties" : {
+        "structurizr.dsl.identifier" : "organizer"
+      },
+      "relationships" : [ {
+        "description" : "Uploads schedule and checks in attendees",
+        "destinationId" : "3",
+        "id" : "23",
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses to manage schedule",
+        "destinationId" : "6",
+        "id" : "25",
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses to scan attendees",
+        "destinationId" : "5",
+        "id" : "26",
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "containers" : [ {
+        "description" : "Mobile Framework",
+        "documentation" : { },
+        "id" : "4",
+        "name" : "Attendee Mobile App",
+        "properties" : {
+          "structurizr.dsl.identifier" : "eventSystem.attendeeApp"
+        },
+        "relationships" : [ {
+          "description" : "Makes API calls to",
+          "destinationId" : "7",
+          "id" : "27",
+          "sourceId" : "4",
+          "tags" : "Relationship",
+          "technology" : "JSON/HTTPS"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Allows attendees to view tracks and book sessions."
+      }, {
+        "description" : "Mobile Framework",
+        "documentation" : { },
+        "id" : "5",
+        "name" : "Organizer Check-in App",
+        "properties" : {
+          "structurizr.dsl.identifier" : "eventSystem.checkinApp"
+        },
+        "relationships" : [ {
+          "description" : "Makes API calls to",
+          "destinationId" : "7",
+          "id" : "29",
+          "sourceId" : "5",
+          "tags" : "Relationship",
+          "technology" : "JSON/HTTPS"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Used to scan tickets or check users into specific sessions."
+      }, {
+        "description" : "Single Page Application",
+        "documentation" : { },
+        "id" : "6",
+        "name" : "Organizer Web Portal",
+        "properties" : {
+          "structurizr.dsl.identifier" : "eventSystem.orgWebapp"
+        },
+        "relationships" : [ {
+          "description" : "Makes API calls to",
+          "destinationId" : "7",
+          "id" : "28",
+          "sourceId" : "6",
+          "tags" : "Relationship",
+          "technology" : "JSON/HTTPS"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Dashboard for loading schedule and session details."
+      }, {
+        "components" : [ {
+          "description" : "REST API",
+          "documentation" : { },
+          "group" : "Presentation Layer (Controllers)",
+          "id" : "8",
+          "name" : "Schedule Controller",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.scheduleCtrl"
+          },
+          "relationships" : [ {
+            "description" : "Uploads/Edits Schedule",
+            "destinationId" : "12",
+            "id" : "31",
+            "sourceId" : "8",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Endpoints for Organizers to upload/edit tracks & sessions"
+        }, {
+          "description" : "REST API",
+          "documentation" : { },
+          "group" : "Presentation Layer (Controllers)",
+          "id" : "9",
+          "name" : "Booking Controller",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.bookingCtrl"
+          },
+          "relationships" : [ {
+            "description" : "Requests Booking",
+            "destinationId" : "13",
+            "id" : "34",
+            "sourceId" : "9",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Endpoints for Attendees to book spots"
+        }, {
+          "description" : "REST API",
+          "documentation" : { },
+          "group" : "Presentation Layer (Controllers)",
+          "id" : "10",
+          "name" : "Check-in Controller",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.checkinCtrl"
+          },
+          "relationships" : [ {
+            "description" : "Scans Ticket",
+            "destinationId" : "15",
+            "id" : "37",
+            "sourceId" : "10",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Registers Walk-in",
+            "destinationId" : "14",
+            "id" : "38",
+            "sourceId" : "10",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Endpoints for Organizers to scan tickets"
+        }, {
+          "description" : "Socket.io/WS",
+          "documentation" : { },
+          "group" : "Presentation Layer (Controllers)",
+          "id" : "11",
+          "name" : "WebSocket Handler",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.wsHandler"
+          },
+          "tags" : "Element,Component",
+          "technology" : "Push channel for live updates"
+        }, {
+          "description" : "Service",
+          "documentation" : { },
+          "group" : "Application Core (Services)",
+          "id" : "12",
+          "name" : "EventService",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.manageSvc"
+          },
+          "relationships" : [ {
+            "description" : "Persists Sessions",
+            "destinationId" : "17",
+            "id" : "32",
+            "sourceId" : "12",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Broadcasts Schedule Changed",
+            "destinationId" : "20",
+            "id" : "33",
+            "sourceId" : "12",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Validates track times, saves sessions, notifies changes."
+        }, {
+          "description" : "Service",
+          "documentation" : { },
+          "group" : "Application Core (Services)",
+          "id" : "13",
+          "name" : "BookSessionService",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.bookSvc"
+          },
+          "relationships" : [ {
+            "description" : "Saves Booking",
+            "destinationId" : "18",
+            "id" : "35",
+            "sourceId" : "13",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Checks Capacity",
+            "destinationId" : "17",
+            "id" : "36",
+            "sourceId" : "13",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Checks capacity, creates booking."
+        }, {
+          "description" : "Service",
+          "documentation" : { },
+          "group" : "Application Core (Services)",
+          "id" : "14",
+          "name" : "WalkInEntryService",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.walkinSvc"
+          },
+          "tags" : "Element,Component",
+          "technology" : "Allows entry if session active & seats released."
+        }, {
+          "description" : "Service",
+          "documentation" : { },
+          "group" : "Application Core (Services)",
+          "id" : "15",
+          "name" : "ProcessCheckInService",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.checkinSvc"
+          },
+          "relationships" : [ {
+            "description" : "Updates Status",
+            "destinationId" : "18",
+            "id" : "39",
+            "sourceId" : "15",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Broadcasts Count update",
+            "destinationId" : "20",
+            "id" : "40",
+            "sourceId" : "15",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Marks attendee present, triggers count update."
+        }, {
+          "description" : "Service",
+          "documentation" : { },
+          "group" : "Application Core (Services)",
+          "id" : "16",
+          "name" : "ReleaseNoShowsService",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.releaseSvc"
+          },
+          "relationships" : [ {
+            "description" : "Cancels No-Shows",
+            "destinationId" : "18",
+            "id" : "42",
+            "sourceId" : "16",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Broadcasts Seats Released",
+            "destinationId" : "20",
+            "id" : "43",
+            "sourceId" : "16",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Cancels bookings X mins after start."
+        }, {
+          "description" : "Repo Impl",
+          "documentation" : { },
+          "group" : "Infrastructure Layer",
+          "id" : "17",
+          "name" : "SessionRepository",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.sessionRepo"
+          },
+          "relationships" : [ {
+            "description" : "SQL",
+            "destinationId" : "21",
+            "id" : "45",
+            "sourceId" : "17",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "SQL for Tracks/Sessions"
+        }, {
+          "description" : "Repo Impl",
+          "documentation" : { },
+          "group" : "Infrastructure Layer",
+          "id" : "18",
+          "name" : "BookingRepository",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.bookingRepo"
+          },
+          "relationships" : [ {
+            "description" : "SQL",
+            "destinationId" : "21",
+            "id" : "46",
+            "sourceId" : "18",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "SQL for Bookings"
+        }, {
+          "description" : "Cron/Quartz",
+          "documentation" : { },
+          "group" : "Infrastructure Layer",
+          "id" : "19",
+          "name" : "Job Scheduler",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.scheduler"
+          },
+          "relationships" : [ {
+            "description" : "Triggers at time X",
+            "destinationId" : "16",
+            "id" : "41",
+            "sourceId" : "19",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Triggers background tasks"
+        }, {
+          "description" : "Adapter",
+          "documentation" : { },
+          "group" : "Infrastructure Layer",
+          "id" : "20",
+          "name" : "RealTimeGateway",
+          "properties" : {
+            "structurizr.dsl.identifier" : "eventSystem.backendApi.rtGateway"
+          },
+          "relationships" : [ {
+            "description" : "Push Events",
+            "destinationId" : "11",
+            "id" : "44",
+            "sourceId" : "20",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component",
+          "technology" : "Abstracts WebSocket logic"
+        } ],
+        "description" : "REST API",
+        "documentation" : { },
+        "id" : "7",
+        "name" : "Backend API",
+        "properties" : {
+          "structurizr.dsl.identifier" : "eventSystem.backendApi"
+        },
+        "relationships" : [ {
+          "description" : "Reads/Writes",
+          "destinationId" : "21",
+          "id" : "30",
+          "sourceId" : "7",
+          "tags" : "Relationship",
+          "technology" : "SQL/TCP"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Centralizes logic, handles booking validation and availability checks."
+      }, {
+        "description" : "PostgreSQL",
+        "documentation" : { },
+        "id" : "21",
+        "name" : "Database",
+        "properties" : {
+          "structurizr.dsl.identifier" : "eventSystem.db"
+        },
+        "tags" : "Element,Container,Database",
+        "technology" : "Stores schedules, user profiles, and booking data."
+      } ],
+      "description" : "Allows booking, scheduling, and check-in management to prevent overcrowding.",
+      "documentation" : { },
+      "id" : "3",
+      "name" : "Event Booking System",
+      "properties" : {
+        "structurizr.dsl.identifier" : "eventSystem"
+      },
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Event Booking System",
+  "properties" : {
+    "structurizr.inspection.info" : "0",
+    "structurizr.inspection.ignore" : "0",
+    "structurizr.inspection.error" : "24",
+    "structurizr.inspection.warning" : "0",
+    "structurizr.dsl" : "d29ya3NwYWNlICJFdmVudCBCb29raW5nIFN5c3RlbSIgIkM0IG1vZGVsIGZvciBldmVudCBib29raW5nLCBzY2hlZHVsaW5nLCBhbmQgY2hlY2staW4gbWFuYWdlbWVudC4iIHsKCiAgICAhaWRlbnRpZmllcnMgaGllcmFyY2hpY2FsCgogICAgbW9kZWwgewogICAgICAgIGF0dGVuZGVlID0gcGVyc29uICJFdmVudCBBdHRlbmRlZSIgIkEgcGVyc29uIGF0dGVuZGluZyB0aGUgbXVsdGl0cmFjayBldmVudC4iCiAgICAgICAgb3JnYW5pemVyID0gcGVyc29uICJFdmVudCBPcmdhbml6ZXIiICJTdGFmZiBtZW1iZXIgbWFuYWdpbmcgdGhlIGV2ZW50IGxvZ2lzdGljcy4iCgogICAgICAgIGV2ZW50U3lzdGVtID0gc29mdHdhcmVTeXN0ZW0gIkV2ZW50IEJvb2tpbmcgU3lzdGVtIiAiQWxsb3dzIGJvb2tpbmcsIHNjaGVkdWxpbmcsIGFuZCBjaGVjay1pbiBtYW5hZ2VtZW50IHRvIHByZXZlbnQgb3ZlcmNyb3dkaW5nLiIgewogICAgICAgICAgICBhdHRlbmRlZUFwcCA9IGNvbnRhaW5lciAiQXR0ZW5kZWUgTW9iaWxlIEFwcCIgIk1vYmlsZSBGcmFtZXdvcmsiICJBbGxvd3MgYXR0ZW5kZWVzIHRvIHZpZXcgdHJhY2tzIGFuZCBib29rIHNlc3Npb25zLiIKICAgICAgICAgICAgY2hlY2tpbkFwcCA9IGNvbnRhaW5lciAiT3JnYW5pemVyIENoZWNrLWluIEFwcCIgIk1vYmlsZSBGcmFtZXdvcmsiICJVc2VkIHRvIHNjYW4gdGlja2V0cyBvciBjaGVjayB1c2VycyBpbnRvIHNwZWNpZmljIHNlc3Npb25zLiIKICAgICAgICAgICAgb3JnV2ViYXBwID0gY29udGFpbmVyICJPcmdhbml6ZXIgV2ViIFBvcnRhbCIgIlNpbmdsZSBQYWdlIEFwcGxpY2F0aW9uIiAiRGFzaGJvYXJkIGZvciBsb2FkaW5nIHNjaGVkdWxlIGFuZCBzZXNzaW9uIGRldGFpbHMuIgogICAgICAgICAgICBiYWNrZW5kQXBpID0gY29udGFpbmVyICJCYWNrZW5kIEFQSSIgIlJFU1QgQVBJIiAiQ2VudHJhbGl6ZXMgbG9naWMsIGhhbmRsZXMgYm9va2luZyB2YWxpZGF0aW9uIGFuZCBhdmFpbGFiaWxpdHkgY2hlY2tzLiIgewogICAgICAgICAgICAgICAgZ3JvdXAgIlByZXNlbnRhdGlvbiBMYXllciAoQ29udHJvbGxlcnMpIiB7CiAgICAgICAgICAgICAgICAgICAgc2NoZWR1bGVDdHJsID0gY29tcG9uZW50ICJTY2hlZHVsZSBDb250cm9sbGVyIiAiUkVTVCBBUEkiICJFbmRwb2ludHMgZm9yIE9yZ2FuaXplcnMgdG8gdXBsb2FkL2VkaXQgdHJhY2tzICYgc2Vzc2lvbnMiCiAgICAgICAgICAgICAgICAgICAgYm9va2luZ0N0cmwgPSBjb21wb25lbnQgIkJvb2tpbmcgQ29udHJvbGxlciIgIlJFU1QgQVBJIiAiRW5kcG9pbnRzIGZvciBBdHRlbmRlZXMgdG8gYm9vayBzcG90cyIKICAgICAgICAgICAgICAgICAgICBjaGVja2luQ3RybCA9IGNvbXBvbmVudCAiQ2hlY2staW4gQ29udHJvbGxlciIgIlJFU1QgQVBJIiAiRW5kcG9pbnRzIGZvciBPcmdhbml6ZXJzIHRvIHNjYW4gdGlja2V0cyIKICAgICAgICAgICAgICAgICAgICB3c0hhbmRsZXIgPSBjb21wb25lbnQgIldlYlNvY2tldCBIYW5kbGVyIiAiU29ja2V0LmlvL1dTIiAiUHVzaCBjaGFubmVsIGZvciBsaXZlIHVwZGF0ZXMiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBncm91cCAiQXBwbGljYXRpb24gQ29yZSAoU2VydmljZXMpIiB7CiAgICAgICAgICAgICAgICAgICAgbWFuYWdlU3ZjID0gY29tcG9uZW50ICJFdmVudFNlcnZpY2UiICJTZXJ2aWNlIiAiVmFsaWRhdGVzIHRyYWNrIHRpbWVzLCBzYXZlcyBzZXNzaW9ucywgbm90aWZpZXMgY2hhbmdlcy4iCiAgICAgICAgICAgICAgICAgICAgYm9va1N2YyA9IGNvbXBvbmVudCAiQm9va1Nlc3Npb25TZXJ2aWNlIiAiU2VydmljZSIgIkNoZWNrcyBjYXBhY2l0eSwgY3JlYXRlcyBib29raW5nLiIKICAgICAgICAgICAgICAgICAgICB3YWxraW5TdmMgPSBjb21wb25lbnQgIldhbGtJbkVudHJ5U2VydmljZSIgIlNlcnZpY2UiICJBbGxvd3MgZW50cnkgaWYgc2Vzc2lvbiBhY3RpdmUgJiBzZWF0cyByZWxlYXNlZC4iCiAgICAgICAgICAgICAgICAgICAgY2hlY2tpblN2YyA9IGNvbXBvbmVudCAiUHJvY2Vzc0NoZWNrSW5TZXJ2aWNlIiAiU2VydmljZSIgIk1hcmtzIGF0dGVuZGVlIHByZXNlbnQsIHRyaWdnZXJzIGNvdW50IHVwZGF0ZS4iCiAgICAgICAgICAgICAgICAgICAgcmVsZWFzZVN2YyA9IGNvbXBvbmVudCAiUmVsZWFzZU5vU2hvd3NTZXJ2aWNlIiAiU2VydmljZSIgIkNhbmNlbHMgYm9va2luZ3MgWCBtaW5zIGFmdGVyIHN0YXJ0LiIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGdyb3VwICJJbmZyYXN0cnVjdHVyZSBMYXllciIgewogICAgICAgICAgICAgICAgICAgIHNlc3Npb25SZXBvID0gY29tcG9uZW50ICJTZXNzaW9uUmVwb3NpdG9yeSIgIlJlcG8gSW1wbCIgIlNRTCBmb3IgVHJhY2tzL1Nlc3Npb25zIgogICAgICAgICAgICAgICAgICAgIGJvb2tpbmdSZXBvID0gY29tcG9uZW50ICJCb29raW5nUmVwb3NpdG9yeSIgIlJlcG8gSW1wbCIgIlNRTCBmb3IgQm9va2luZ3MiCiAgICAgICAgICAgICAgICAgICAgc2NoZWR1bGVyID0gY29tcG9uZW50ICJKb2IgU2NoZWR1bGVyIiAiQ3Jvbi9RdWFydHoiICJUcmlnZ2VycyBiYWNrZ3JvdW5kIHRhc2tzIgogICAgICAgICAgICAgICAgICAgIHJ0R2F0ZXdheSA9IGNvbXBvbmVudCAiUmVhbFRpbWVHYXRld2F5IiAiQWRhcHRlciIgIkFic3RyYWN0cyBXZWJTb2NrZXQgbG9naWMiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZGIgPSBjb250YWluZXIgIkRhdGFiYXNlIiAiUG9zdGdyZVNRTCIgIlN0b3JlcyBzY2hlZHVsZXMsIHVzZXIgcHJvZmlsZXMsIGFuZCBib29raW5nIGRhdGEuIiB7CiAgICAgICAgICAgICAgICB0YWdzICJEYXRhYmFzZSIKICAgICAgICAgICAgfQogICAgICAgIH0KCiAgICAgICAgYXR0ZW5kZWUgLT4gZXZlbnRTeXN0ZW0gIlZpZXdzIGF2YWlsYWJpbGl0eSBhbmQgYm9va3Mgc2Vzc2lvbnMiCiAgICAgICAgb3JnYW5pemVyIC0+IGV2ZW50U3lzdGVtICJVcGxvYWRzIHNjaGVkdWxlIGFuZCBjaGVja3MgaW4gYXR0ZW5kZWVzIgogICAgICAgIGF0dGVuZGVlIC0+IGV2ZW50U3lzdGVtLmF0dGVuZGVlQXBwICJVc2VzIgogICAgICAgIG9yZ2FuaXplciAtPiBldmVudFN5c3RlbS5vcmdXZWJhcHAgIlVzZXMgdG8gbWFuYWdlIHNjaGVkdWxlIgogICAgICAgIG9yZ2FuaXplciAtPiBldmVudFN5c3RlbS5jaGVja2luQXBwICJVc2VzIHRvIHNjYW4gYXR0ZW5kZWVzIgogICAgICAgIGV2ZW50U3lzdGVtLmF0dGVuZGVlQXBwIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkgIk1ha2VzIEFQSSBjYWxscyB0byIgIkpTT04vSFRUUFMiCiAgICAgICAgZXZlbnRTeXN0ZW0ub3JnV2ViYXBwIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkgIk1ha2VzIEFQSSBjYWxscyB0byIgIkpTT04vSFRUUFMiCiAgICAgICAgZXZlbnRTeXN0ZW0uY2hlY2tpbkFwcCAtPiBldmVudFN5c3RlbS5iYWNrZW5kQXBpICJNYWtlcyBBUEkgY2FsbHMgdG8iICJKU09OL0hUVFBTIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkgLT4gZXZlbnRTeXN0ZW0uZGIgIlJlYWRzL1dyaXRlcyIgIlNRTC9UQ1AiCgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuc2NoZWR1bGVDdHJsIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkubWFuYWdlU3ZjICJVcGxvYWRzL0VkaXRzIFNjaGVkdWxlIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkubWFuYWdlU3ZjIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuc2Vzc2lvblJlcG8gIlBlcnNpc3RzIFNlc3Npb25zIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkubWFuYWdlU3ZjIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkucnRHYXRld2F5ICJCcm9hZGNhc3RzIFNjaGVkdWxlIENoYW5nZWQiCiAgICAgICAgZXZlbnRTeXN0ZW0uYmFja2VuZEFwaS5ib29raW5nQ3RybCAtPiBldmVudFN5c3RlbS5iYWNrZW5kQXBpLmJvb2tTdmMgIlJlcXVlc3RzIEJvb2tpbmciCiAgICAgICAgZXZlbnRTeXN0ZW0uYmFja2VuZEFwaS5ib29rU3ZjIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuYm9va2luZ1JlcG8gIlNhdmVzIEJvb2tpbmciCiAgICAgICAgZXZlbnRTeXN0ZW0uYmFja2VuZEFwaS5ib29rU3ZjIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuc2Vzc2lvblJlcG8gIkNoZWNrcyBDYXBhY2l0eSIKICAgICAgICBldmVudFN5c3RlbS5iYWNrZW5kQXBpLmNoZWNraW5DdHJsIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuY2hlY2tpblN2YyAiU2NhbnMgVGlja2V0IgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuY2hlY2tpbkN0cmwgLT4gZXZlbnRTeXN0ZW0uYmFja2VuZEFwaS53YWxraW5TdmMgIlJlZ2lzdGVycyBXYWxrLWluIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuY2hlY2tpblN2YyAtPiBldmVudFN5c3RlbS5iYWNrZW5kQXBpLmJvb2tpbmdSZXBvICJVcGRhdGVzIFN0YXR1cyIKICAgICAgICBldmVudFN5c3RlbS5iYWNrZW5kQXBpLmNoZWNraW5TdmMgLT4gZXZlbnRTeXN0ZW0uYmFja2VuZEFwaS5ydEdhdGV3YXkgIkJyb2FkY2FzdHMgQ291bnQgdXBkYXRlIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuc2NoZWR1bGVyIC0+IGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkucmVsZWFzZVN2YyAiVHJpZ2dlcnMgYXQgdGltZSBYIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkucmVsZWFzZVN2YyAtPiBldmVudFN5c3RlbS5iYWNrZW5kQXBpLmJvb2tpbmdSZXBvICJDYW5jZWxzIE5vLVNob3dzIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkucmVsZWFzZVN2YyAtPiBldmVudFN5c3RlbS5iYWNrZW5kQXBpLnJ0R2F0ZXdheSAiQnJvYWRjYXN0cyBTZWF0cyBSZWxlYXNlZCIKICAgICAgICBldmVudFN5c3RlbS5iYWNrZW5kQXBpLnJ0R2F0ZXdheSAtPiBldmVudFN5c3RlbS5iYWNrZW5kQXBpLndzSGFuZGxlciAiUHVzaCBFdmVudHMiCiAgICAgICAgZXZlbnRTeXN0ZW0uYmFja2VuZEFwaS5zZXNzaW9uUmVwbyAtPiBldmVudFN5c3RlbS5kYiAiU1FMIgogICAgICAgIGV2ZW50U3lzdGVtLmJhY2tlbmRBcGkuYm9va2luZ1JlcG8gLT4gZXZlbnRTeXN0ZW0uZGIgIlNRTCIKICAgIH0KCiAgICB2aWV3cyB7CiAgICAgICAgc3lzdGVtQ29udGV4dCBldmVudFN5c3RlbSAiU3lzdGVtQ29udGV4dCIgIlN5c3RlbSBDb250ZXh0IERpYWdyYW0gZm9yIEV2ZW50IEJvb2tpbmcgU3lzdGVtIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0IGxyCiAgICAgICAgfQogICAgICAgIGNvbnRhaW5lciBldmVudFN5c3RlbSAiQ29udGFpbmVycyIgIkNvbnRhaW5lciBEaWFncmFtIGZvciBFdmVudCBCb29raW5nIFN5c3RlbSIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b0xheW91dCBscgogICAgICAgIH0KICAgICAgICBjb21wb25lbnQgZXZlbnRTeXN0ZW0uYmFja2VuZEFwaSAiQmFja2VuZEFQSSIgIkNvbXBvbmVudCBEaWFncmFtIC0gQmFja2VuZCBBUEkgKENvbXBsZXRlKSIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b0xheW91dCB0YgogICAgICAgIH0KCiAgICAgICAgc3R5bGVzIHsKICAgICAgICAgICAgZWxlbWVudCAiRWxlbWVudCIgewogICAgICAgICAgICAgICAgc2hhcGUgUm91bmRlZEJveAogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlBlcnNvbiIgewogICAgICAgICAgICAgICAgc2hhcGUgUGVyc29uCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiRGF0YWJhc2UiIHsKICAgICAgICAgICAgICAgIHNoYXBlIEN5bGluZGVyCiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICB9Cn0="
+  },
+  "views" : {
+    "componentViews" : [ {
+      "automaticLayout" : {
+        "applied" : true,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "containerId" : "7",
+      "description" : "Component Diagram - Backend API (Complete)",
+      "dimensions" : {
+        "height" : 2659,
+        "width" : 4156
+      },
+      "elements" : [ {
+        "id" : "8",
+        "x" : 2696,
+        "y" : 203
+      }, {
+        "id" : "9",
+        "x" : 3446,
+        "y" : 203
+      }, {
+        "id" : "10",
+        "x" : 1946,
+        "y" : 203
+      }, {
+        "id" : "11",
+        "x" : 1196,
+        "y" : 203
+      }, {
+        "id" : "12",
+        "x" : 2696,
+        "y" : 803
+      }, {
+        "id" : "13",
+        "x" : 3446,
+        "y" : 803
+      }, {
+        "id" : "14",
+        "x" : 1946,
+        "y" : 803
+      }, {
+        "id" : "15",
+        "x" : 1196,
+        "y" : 803
+      }, {
+        "id" : "16",
+        "x" : 446,
+        "y" : 803
+      }, {
+        "id" : "17",
+        "x" : 2696,
+        "y" : 1403
+      }, {
+        "id" : "18",
+        "x" : 1946,
+        "y" : 1403
+      }, {
+        "id" : "19",
+        "x" : 446,
+        "y" : 1403
+      }, {
+        "id" : "20",
+        "x" : 1196,
+        "y" : 1403
+      }, {
+        "id" : "21",
+        "x" : 2321,
+        "y" : 2003
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "key" : "BackendAPI",
+      "name" : "Component View: Event Booking System - Backend API",
+      "order" : 3,
+      "relationships" : [ {
+        "id" : "31"
+      }, {
+        "id" : "32"
+      }, {
+        "id" : "33",
+        "vertices" : [ {
+          "x" : 2546,
+          "y" : 1207
+        }, {
+          "x" : 1796,
+          "y" : 1299
+        } ]
+      }, {
+        "id" : "34"
+      }, {
+        "id" : "35",
+        "vertices" : [ {
+          "x" : 3296,
+          "y" : 1207
+        }, {
+          "x" : 2546,
+          "y" : 1299
+        } ]
+      }, {
+        "id" : "36"
+      }, {
+        "id" : "37"
+      }, {
+        "id" : "38"
+      }, {
+        "id" : "39"
+      }, {
+        "id" : "40"
+      }, {
+        "id" : "41"
+      }, {
+        "id" : "42",
+        "vertices" : [ {
+          "x" : 1046,
+          "y" : 1207
+        }, {
+          "x" : 1796,
+          "y" : 1299
+        } ]
+      }, {
+        "id" : "43"
+      }, {
+        "id" : "44",
+        "vertices" : [ {
+          "x" : 1046,
+          "y" : 1299
+        }, {
+          "x" : 267,
+          "y" : 1207
+        }, {
+          "x" : 267,
+          "y" : 699
+        } ]
+      }, {
+        "id" : "45"
+      }, {
+        "id" : "46"
+      } ]
+    } ],
+    "configuration" : {
+      "branding" : { },
+      "lastSavedView" : "Containers",
+      "metadataSymbols" : "SquareBrackets",
+      "styles" : {
+        "elements" : [ {
+          "shape" : "Cylinder",
+          "tag" : "Database"
+        }, {
+          "shape" : "RoundedBox",
+          "tag" : "Element"
+        }, {
+          "shape" : "Person",
+          "tag" : "Person"
+        } ]
+      },
+      "terminology" : { }
+    },
+    "containerViews" : [ {
+      "automaticLayout" : {
+        "applied" : true,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "description" : "Container Diagram for Event Booking System",
+      "dimensions" : {
+        "height" : 2049,
+        "width" : 3070
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 199,
+        "y" : 142
+      }, {
+        "id" : "2",
+        "x" : 199,
+        "y" : 1092
+      }, {
+        "id" : "4",
+        "x" : 899,
+        "y" : 192
+      }, {
+        "id" : "5",
+        "x" : 899,
+        "y" : 792
+      }, {
+        "id" : "6",
+        "x" : 899,
+        "y" : 1392
+      }, {
+        "id" : "7",
+        "x" : 1649,
+        "y" : 792
+      }, {
+        "id" : "21",
+        "x" : 2399,
+        "y" : 792
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "key" : "Containers",
+      "name" : "Container View: Event Booking System",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "24"
+      }, {
+        "id" : "25"
+      }, {
+        "id" : "26"
+      }, {
+        "id" : "27"
+      }, {
+        "id" : "28"
+      }, {
+        "id" : "29"
+      }, {
+        "id" : "30"
+      } ],
+      "softwareSystemId" : "3"
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "applied" : true,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "description" : "System Context Diagram for Event Booking System",
+      "dimensions" : {
+        "height" : 1500,
+        "width" : 1550
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 200,
+        "y" : 143
+      }, {
+        "id" : "2",
+        "x" : 200,
+        "y" : 843
+      }, {
+        "id" : "3",
+        "x" : 900,
+        "y" : 543
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "SystemContext",
+      "name" : "System Context View: Event Booking System",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "22"
+      }, {
+        "id" : "23"
+      } ],
+      "softwareSystemId" : "3"
+    } ]
+  }
+}

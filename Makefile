@@ -49,6 +49,10 @@ docker-up:
 docker-down:
 	docker compose down
 
+# C4 diagrams: Structurizr DSL viewer (http://localhost:8081)
+c4-lite:
+	docker run -it --rm -p 8081:8080 -v "$(CURDIR)/docs/c4:/usr/local/structurizr" structurizr/lite
+
 start-dev: docker-up
 	@echo "Waiting for database to be ready..."
 	@sleep 3
