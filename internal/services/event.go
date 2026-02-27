@@ -1173,6 +1173,138 @@ func (s *eventService) RemoveSessionTag(ctx context.Context, eventID, sessionID,
 	return nil
 }
 
+func (s *eventService) AddSessionSpeaker(ctx context.Context, eventID, sessionID, ownerID, speakerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get session: %w", err)
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	speaker, err := s.sessionRepo.GetSpeakerByID(ctx, speakerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get speaker: %w", err)
+	}
+	if speaker.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	if err := s.sessionRepo.CreateSessionSpeaker(ctx, sessionID, speakerID); err != nil {
+		return fmt.Errorf("add session speaker: %w", err)
+	}
+	return nil
+}
+
+func (s *eventService) RemoveSessionSpeaker(ctx context.Context, eventID, sessionID, ownerID, speakerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != ownerID {
+		return domain.ErrForbidden
+	}
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get session: %w", err)
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return domain.ErrNotFound
+	}
+	if err := s.sessionRepo.DeleteSessionSpeaker(ctx, sessionID, speakerID); err != nil {
+		return fmt.Errorf("remove session speaker: %w", err)
+	}
+	return nil
+}
+
+func (s *eventService) ListSessionSpeakers(ctx context.Context, eventID, sessionID, callerID string) ([]*domain.Speaker, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
+	defer cancel()
+
+	event, err := s.eventRepo.GetByID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get event: %w", err)
+	}
+	if event.OwnerID != callerID {
+		return nil, domain.ErrForbidden
+	}
+
+	sess, err := s.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get session: %w", err)
+	}
+	room, err := s.sessionRepo.GetRoomByID(ctx, sess.RoomID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get room: %w", err)
+	}
+	if room.EventID != eventID {
+		return nil, domain.ErrNotFound
+	}
+
+	speakers, err := s.sessionRepo.ListSpeakersBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list session speakers: %w", err)
+	}
+	for _, sp := range speakers {
+		if sp.EventID != eventID {
+			return nil, domain.ErrNotFound
+		}
+	}
+	if speakers == nil {
+		speakers = []*domain.Speaker{}
+	}
+	return speakers, nil
+}
+
 func (s *eventService) RemoveEventTag(ctx context.Context, eventID, ownerID, tagID string) error {
 	ctx, cancel := context.WithTimeout(ctx, s.contextTimeout)
 	defer cancel()

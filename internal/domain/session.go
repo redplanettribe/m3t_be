@@ -90,6 +90,7 @@ type SessionRepository interface {
 	CreateSession(ctx context.Context, session *Session) error
 	CreateSpeaker(ctx context.Context, speaker *Speaker) error
 	CreateSessionSpeaker(ctx context.Context, sessionID, speakerID string) error
+	DeleteSessionSpeaker(ctx context.Context, sessionID, speakerID string) error
 	DeleteScheduleByEventID(ctx context.Context, eventID string) error
 	DeleteSpeakersByEventID(ctx context.Context, eventID string) error
 	GetSessionByID(ctx context.Context, sessionID string) (*Session, error)
@@ -99,6 +100,7 @@ type SessionRepository interface {
 	ListSpeakerIDsBySessionIDs(ctx context.Context, sessionIDs []string) (map[string][]string, error)
 	GetSpeakerByID(ctx context.Context, speakerID string) (*Speaker, error)
 	ListSpeakersByEventID(ctx context.Context, eventID string) ([]*Speaker, error)
+	ListSpeakersBySessionID(ctx context.Context, sessionID string) ([]*Speaker, error)
 	ListSessionIDsBySpeakerID(ctx context.Context, speakerID string) ([]string, error)
 	ListSessionsByIDs(ctx context.Context, sessionIDs []string) ([]*Session, error)
 	DeleteSpeaker(ctx context.Context, speakerID string) error

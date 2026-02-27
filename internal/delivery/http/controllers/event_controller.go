@@ -1850,6 +1850,162 @@ func (c *ScheduleController) RemoveSessionTag(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListSessionSpeakers godoc
+// @Summary List speakers for a session
+// @Description Returns the list of speakers for the session (full speaker objects). Only the event owner can list. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Success 200 {object} controllers.ListSpeakersSuccessResponse "data is an array of speakers"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID}/speakers [get]
+func (c *ScheduleController) ListSessionSpeakers(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	if eventID == "" || sessionID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	speakers, err := c.Service.ListSessionSpeakers(r.Context(), eventID, sessionID, ownerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event or session not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	if speakers == nil {
+		speakers = []*domain.Speaker{}
+	}
+	helpers.WriteJSONSuccess(w, http.StatusOK, speakers)
+}
+
+// AddSessionSpeakerRequest is the request body for POST /events/{eventID}/sessions/{sessionID}/speakers.
+type AddSessionSpeakerRequest struct {
+	SpeakerID string `json:"speaker_id"`
+}
+
+// Validate implements Validator.
+func (a AddSessionSpeakerRequest) Validate() []string {
+	if strings.TrimSpace(a.SpeakerID) == "" {
+		return []string{"speaker_id is required"}
+	}
+	return nil
+}
+
+// AddSessionSpeaker godoc
+// @Summary Add a speaker to a session
+// @Description Links a speaker (by id) to a session. The speaker must already belong to the event. Only the event owner can add. Requires authentication.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Param body body AddSessionSpeakerRequest true "Speaker ID"
+// @Success 204 "No content"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID}/speakers [post]
+func (c *ScheduleController) AddSessionSpeaker(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	if eventID == "" || sessionID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID or sessionID")
+		return
+	}
+	var req AddSessionSpeakerRequest
+	if !helpers.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	err := c.Service.AddSessionSpeaker(r.Context(), eventID, sessionID, ownerID, req.SpeakerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event, session, or speaker not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RemoveSessionSpeaker godoc
+// @Summary Remove a speaker from a session
+// @Description Unlinks a speaker from a session. Only the event owner can remove. Requires authentication.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID (UUID)"
+// @Param sessionID path string true "Session ID (UUID)"
+// @Param speakerID path string true "Speaker ID (UUID)"
+// @Success 204 "No content"
+// @Failure 400 {object} helpers.APIResponse "error.code: bad_request"
+// @Failure 401 {object} helpers.APIResponse "error.code: unauthorized"
+// @Failure 403 {object} helpers.APIResponse "error.code: forbidden (not owner)"
+// @Failure 404 {object} helpers.APIResponse "error.code: not_found"
+// @Failure 500 {object} helpers.APIResponse "error.code: internal_error"
+// @Router /events/{eventID}/sessions/{sessionID}/speakers/{speakerID} [delete]
+func (c *ScheduleController) RemoveSessionSpeaker(w http.ResponseWriter, r *http.Request) {
+	eventID := r.PathValue("eventID")
+	sessionID := r.PathValue("sessionID")
+	speakerID := r.PathValue("speakerID")
+	if eventID == "" || sessionID == "" || speakerID == "" {
+		helpers.WriteJSONError(w, http.StatusBadRequest, helpers.ErrCodeBadRequest, "missing eventID, sessionID, or speakerID")
+		return
+	}
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		helpers.WriteJSONError(w, http.StatusUnauthorized, helpers.ErrCodeUnauthorized, "unauthorized")
+		return
+	}
+	err := c.Service.RemoveSessionSpeaker(r.Context(), eventID, sessionID, ownerID, speakerID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			helpers.WriteJSONError(w, http.StatusNotFound, helpers.ErrCodeNotFound, "event, session, or speaker not found")
+			return
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			helpers.WriteJSONError(w, http.StatusForbidden, helpers.ErrCodeForbidden, "forbidden")
+			return
+		}
+		c.Logger.ErrorContext(r.Context(), "request failed", "path", r.URL.Path, "method", r.Method, "err", err)
+		helpers.WriteJSONError(w, http.StatusInternalServerError, helpers.ErrCodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // CreateEventSession godoc
 // @Summary Create a session
 // @Description Creates a new session for the event in a given room and time slot, with optional tags and speakers. Only the event owner can create. Requires authentication.

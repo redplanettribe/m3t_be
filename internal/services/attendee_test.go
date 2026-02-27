@@ -106,6 +106,9 @@ func (m *mockSessionRepository) CreateSpeaker(ctx context.Context, speaker *doma
 func (m *mockSessionRepository) CreateSessionSpeaker(ctx context.Context, sessionID, speakerID string) error {
 	return nil
 }
+func (m *mockSessionRepository) DeleteSessionSpeaker(ctx context.Context, sessionID, speakerID string) error {
+	return nil
+}
 func (m *mockSessionRepository) DeleteScheduleByEventID(ctx context.Context, eventID string) error {
 	return nil
 }
@@ -140,6 +143,9 @@ func (m *mockSessionRepository) GetSpeakerByID(ctx context.Context, speakerID st
 	return nil, domain.ErrNotFound
 }
 func (m *mockSessionRepository) ListSpeakersByEventID(ctx context.Context, eventID string) ([]*domain.Speaker, error) {
+	return nil, nil
+}
+func (m *mockSessionRepository) ListSpeakersBySessionID(ctx context.Context, sessionID string) ([]*domain.Speaker, error) {
 	return nil, nil
 }
 func (m *mockSessionRepository) ListSessionIDsBySpeakerID(ctx context.Context, speakerID string) ([]string, error) {

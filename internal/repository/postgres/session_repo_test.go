@@ -722,6 +722,127 @@ func TestSessionRepository_DeleteSession(t *testing.T) {
 	}
 }
 
+func TestSessionRepository_DeleteSessionSpeaker(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name      string
+		sessionID string
+		speakerID string
+		mock      func(mock sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name:      "success",
+			sessionID: "sess-1",
+			speakerID: "spk-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM session_speakers WHERE session_id = \$1 AND speaker_id = \$2`).
+					WithArgs("sess-1", "spk-1").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "idempotent no row",
+			sessionID: "sess-1",
+			speakerID: "spk-missing",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM session_speakers WHERE session_id = \$1 AND speaker_id = \$2`).
+					WithArgs("sess-1", "spk-missing").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "db error",
+			sessionID: "sess-1",
+			speakerID: "spk-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(`DELETE FROM session_speakers WHERE session_id = \$1 AND speaker_id = \$2`).
+					WithArgs("sess-1", "spk-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			err = repo.DeleteSessionSpeaker(ctx, tt.sessionID, tt.speakerID)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestSessionRepository_ListSpeakersBySessionID(t *testing.T) {
+	ctx := context.Background()
+	createdAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		sessionID string
+		mock      func(mock sqlmock.Sqlmock)
+		wantLen   int
+		wantErr   bool
+	}{
+		{
+			name:      "success",
+			sessionID: "sess-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows([]string{
+					"id", "event_id", "source_session_id", "source", "first_name", "last_name", "bio", "tag_line", "profile_picture", "is_top_speaker", "created_at", "updated_at",
+				}).
+					AddRow("sp-1", "ev-1", "src-1", "admin_app", "Alice", "A", "bio", "tag", "pic", false, createdAt, updatedAt).
+					AddRow("sp-2", "ev-1", "src-2", "admin_app", "Bob", "B", "bio2", "tag2", "pic2", true, createdAt, updatedAt)
+				mock.ExpectQuery(`FROM speakers s\s+INNER JOIN session_speakers ss ON ss\.speaker_id = s\.id\s+WHERE ss\.session_id = \$1`).
+					WithArgs("sess-1").
+					WillReturnRows(rows)
+			},
+			wantLen: 2,
+		},
+		{
+			name:      "db error",
+			sessionID: "sess-1",
+			mock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(`FROM speakers s\s+INNER JOIN session_speakers ss ON ss\.speaker_id = s\.id\s+WHERE ss\.session_id = \$1`).
+					WithArgs("sess-1").
+					WillReturnError(sql.ErrConnDone)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			tt.mock(mock)
+			repo := NewSessionRepository(db)
+			speakers, err := repo.ListSpeakersBySessionID(ctx, tt.sessionID)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, speakers, tt.wantLen)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestSessionRepository_ListSessionsByEventID(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Date(2025, 3, 1, 10, 0, 0, 0, time.UTC)

@@ -70,6 +70,9 @@ type EventService interface {
 	AddEventTags(ctx context.Context, eventID, ownerID string, tagNames []string) ([]*Tag, error)
 	AddSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error
 	RemoveSessionTag(ctx context.Context, eventID, sessionID, ownerID, tagID string) error
+	AddSessionSpeaker(ctx context.Context, eventID, sessionID, ownerID, speakerID string) error
+	RemoveSessionSpeaker(ctx context.Context, eventID, sessionID, ownerID, speakerID string) error
+	ListSessionSpeakers(ctx context.Context, eventID, sessionID, callerID string) ([]*Speaker, error)
 	UpdateEventTag(ctx context.Context, eventID, tagID, ownerID, name string) (*Tag, error)
 	RemoveEventTag(ctx context.Context, eventID, ownerID, tagID string) error
 }

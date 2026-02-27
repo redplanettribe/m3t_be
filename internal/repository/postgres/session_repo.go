@@ -61,6 +61,11 @@ func (r *SessionRepository) CreateSessionSpeaker(ctx context.Context, sessionID,
 	return err
 }
 
+func (r *SessionRepository) DeleteSessionSpeaker(ctx context.Context, sessionID, speakerID string) error {
+	_, err := r.DB.ExecContext(ctx, `DELETE FROM session_speakers WHERE session_id = $1 AND speaker_id = $2`, sessionID, speakerID)
+	return err
+}
+
 func (r *SessionRepository) DeleteScheduleByEventID(ctx context.Context, eventID string) error {
 	query := `DELETE FROM rooms WHERE event_id = $1`
 	_, err := r.DB.ExecContext(ctx, query, eventID)
@@ -342,6 +347,29 @@ func (r *SessionRepository) ListSpeakersByEventID(ctx context.Context, eventID s
 		ORDER BY first_name, last_name, id
 	`
 	rows, err := r.DB.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var speakers []*domain.Speaker
+	for rows.Next() {
+		sp := &domain.Speaker{}
+		if err := rows.Scan(&sp.ID, &sp.EventID, &sp.SourceSessionID, &sp.Source, &sp.FirstName, &sp.LastName, &sp.Bio, &sp.TagLine, &sp.ProfilePicture, &sp.IsTopSpeaker, &sp.CreatedAt, &sp.UpdatedAt); err != nil {
+			return nil, err
+		}
+		speakers = append(speakers, sp)
+	}
+	return speakers, rows.Err()
+}
+
+func (r *SessionRepository) ListSpeakersBySessionID(ctx context.Context, sessionID string) ([]*domain.Speaker, error) {
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT s.id, s.event_id, s.source_session_id, s.source, s.first_name, s.last_name, s.bio, s.tag_line, s.profile_picture, s.is_top_speaker, s.created_at, s.updated_at
+		FROM speakers s
+		INNER JOIN session_speakers ss ON ss.speaker_id = s.id
+		WHERE ss.session_id = $1
+		ORDER BY s.first_name, s.last_name, s.id
+	`, sessionID)
 	if err != nil {
 		return nil, err
 	}
